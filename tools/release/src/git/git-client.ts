@@ -1,4 +1,21 @@
+/**
+ * @license
+ * Copyright 2019 Dynatrace LLC
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { SpawnSyncReturns, spawnSync } from 'child_process';
+import { GITHUB_URL } from './github-urls';
 
 /**
  * Class that can be used to execute Git commands within a
@@ -9,7 +26,7 @@ import { SpawnSyncReturns, spawnSync } from 'child_process';
  * is always the target project directory.
  */
 export class GitClient {
-  constructor(public projectDir: string, public remoteGitUrl: string) {}
+  constructor(public projectDir: string) {}
 
   /** Gets the currently checked out branch for the project directory. */
   getCurrentBranch(): string {
@@ -24,7 +41,7 @@ export class GitClient {
   getRemoteCommitSha(branchName: string): string {
     return this._spawnGitProcess([
       'ls-remote',
-      this.remoteGitUrl,
+      GITHUB_URL,
       '-h',
       `refs/heads/${branchName}`,
     ])
@@ -64,19 +81,39 @@ export class GitClient {
    * given commit message.
    */
   createNewCommit(message: string): boolean {
-    return this._spawnGitProcess(['commit', '-m', message]).status === 0;
+    return (
+      this._spawnGitProcess(['commit', '--no-verify', '-m', message]).status ===
+      0
+    );
   }
 
   /** Creates a tag for the specified commit reference. */
-  createTag(tagName: string): boolean {
-    return this._spawnGitProcess(['tag', tagName]).status === 0;
+  createTag(tagName: string, message: string): boolean {
+    return this._spawnGitProcess(['tag', tagName, '-m', message]).status === 0;
+  }
+
+  /** Checks whether the specified tag exists locally. */
+  hasLocalTag(tagName: string): boolean {
+    return (
+      this._spawnGitProcess(['rev-parse', `refs/tags/${tagName}`], false)
+        .status === 0
+    );
+  }
+
+  /** Gets the Git SHA of the specified local tag. */
+  getShaOfLocalTag(tagName: string): string {
+    // We need to use the "^{}" suffix to instruct Git to deference the tag to
+    // the actual commit. See: https://www.git-scm.com/docs/git-rev-parse
+    return this._spawnGitProcess([
+      'rev-parse',
+      `refs/tags/${tagName}^{}`,
+    ]).stdout.trim();
   }
 
   /** Push committed changes to remote */
   pushBranchOrTagToRemote(branchOrTagName: string): boolean {
     return (
-      this._spawnGitProcess(['push', this.remoteGitUrl, branchOrTagName])
-        .status === 0
+      this._spawnGitProcess(['push', GITHUB_URL, branchOrTagName]).status === 0
     );
   }
 
@@ -97,7 +134,7 @@ export class GitClient {
 
   /** Run a clone into the current directory. */
   clone(): boolean {
-    return this._spawnGitProcess(['clone', this.remoteGitUrl, '.']).status === 0;
+    return this._spawnGitProcess(['clone', GITHUB_URL, '.']).status === 0;
   }
 
   /**
@@ -107,7 +144,7 @@ export class GitClient {
    */
   private _spawnGitProcess(
     args: string[],
-    printStderr = true,
+    printStderr: boolean = true,
   ): SpawnSyncReturns<string> {
     return spawnSync('git', args, {
       cwd: this.projectDir,

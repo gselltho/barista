@@ -1,33 +1,41 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+/**
+ * @license
+ * Copyright 2019 Dynatrace LLC
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import { writeFileSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-
 import { bold, cyan, green, italic, red, yellow } from 'chalk';
-import { prompt } from 'inquirer';
 
-import { promptAndGenerateChangelog } from './changelog';
-import { getReleaseCommit } from './get-release-version';
-import { GitClient } from './git-client';
+import { promptAndGenerateChangelog, CHANGELOG_FILE_NAME } from './changelog';
+import { getReleaseCommit } from './release-check';
+import { GITHUB_REPO_OWNER, GITHUB_REPO_NAME } from './git/github-urls';
 import { promptForNewVersion } from './new-version-prompt';
 import { Version, parseVersionName } from './parse-version';
 import { getAllowedPublishBranch } from './publish-branch';
+import { BaseReleaseTask } from './base-release';
 
-/** Default filename for the changelog. */
-const CHANGELOG_FILE_NAME = 'CHANGELOG.md';
-
-class StageReleaseTask {
+class StageReleaseTask extends BaseReleaseTask {
   /** Path to the project package JSON. */
   packageJsonPath: string;
-
-  /** Serialized package.json of the specified project. */
-  packageJson: any;
 
   /** Parsed current version of the project. */
   currentVersion: Version;
 
-  /** Instance of a wrapper that can execute Git commands. */
-  git: GitClient;
+  constructor(public projectDir: string) {
+    super(projectDir);
 
-  constructor(public projectDir: string, public repositoryName: string) {
     this.packageJsonPath = join(projectDir, 'package.json');
 
     if (!existsSync(this.packageJsonPath)) {
@@ -43,7 +51,7 @@ class StageReleaseTask {
     }
 
     this.packageJson = JSON.parse(readFileSync(this.packageJsonPath, 'utf-8'));
-    this.currentVersion = parseVersionName(this.packageJson.version);
+    this.currentVersion = parseVersionName(this.packageJson.version)!;
 
     if (!this.currentVersion) {
       console.error(
@@ -55,14 +63,12 @@ class StageReleaseTask {
       );
       process.exit(1);
     }
-
-    this.git = new GitClient(projectDir, `<bitbucket>${repositoryName}.git`);
   }
 
-  async run() {
+  async run(): Promise<void> {
     console.log();
     console.log(cyan('-----------------------------------------------------'));
-    console.log(cyan('  Dynatrace Angular Components stage release script'));
+    console.log(cyan('  Dynatrace Barista Components stage release script'));
     console.log(cyan('-----------------------------------------------------'));
     console.log();
 
@@ -80,6 +86,7 @@ class StageReleaseTask {
     const publishBranch = this._switchToPublishBranch(newVersion);
 
     this.verifyLocalCommitsMatchUpstream(publishBranch);
+    await this._verifyPassingGithubStatus(publishBranch);
 
     if (!this.git.checkoutNewBranch(stagingBranch)) {
       console.error(
@@ -106,7 +113,7 @@ class StageReleaseTask {
 
     await promptAndGenerateChangelog(
       join(this.projectDir, CHANGELOG_FILE_NAME),
-      `Version ${newVersionName}`,
+      '',
     );
 
     console.log();
@@ -122,23 +129,22 @@ class StageReleaseTask {
     );
     console.log();
 
-    const { shouldContinue } = await prompt<{ shouldContinue: boolean }>({
-      type: 'confirm',
-      name: 'shouldContinue',
-      message: 'Do you want to proceed and commit the changes?',
-    });
-
-    if (!shouldContinue) {
+    if (
+      !(await this._promptConfirm(
+        'Do you want to proceed and commit the changes?',
+      ))
+    ) {
       console.log();
       console.log(yellow('Aborting release staging...'));
       process.exit(1);
     }
 
     this.git.stageAllChanges();
+
     if (needsVersionBump) {
       this.git.createNewCommit(getReleaseCommit(newVersionName));
     } else {
-      this.git.createNewCommit(`chore: update changelog for ${newVersionName}`);
+      this.git.createNewCommit(`chore: Update changelog for ${newVersionName}`);
     }
 
     console.info();
@@ -147,6 +153,7 @@ class StageReleaseTask {
     );
     console.info();
 
+    // Pushing
     if (!this.git.pushBranchOrTagToRemote(stagingBranch)) {
       console.error(
         red(
@@ -157,11 +164,35 @@ class StageReleaseTask {
     }
     console.info(
       green(
-        `  ✓   Pushed release staging branch "${stagingBranch}" to remote. ` +
-          `Please create a PR on bitbucket.`,
+        `  ✓   Pushed release staging branch "${stagingBranch}" to remote.`,
       ),
     );
-    console.info();
+
+    const prTitle = needsVersionBump
+      ? 'Bump version to ${version} w/ changelog'
+      : 'Update changelog for ${newVersionName}';
+    const { state } = (await this.githubApi.pulls.create({
+      title: prTitle,
+      head: stagingBranch,
+      base: 'master',
+      owner: GITHUB_REPO_OWNER,
+      repo: GITHUB_REPO_NAME,
+    })).data;
+
+    if (state === 'failure') {
+      console.error(
+        red(
+          `Could not push create a pull-request for release staging branch "${stagingBranch}"` +
+            `Please create the pull-request named "${prTitle}" by hand.`,
+        ),
+      );
+      process.exit(1);
+    }
+    console.info(
+      green(
+        `  ✓   Created the pull-request "${prTitle}" for the release staging branch "${stagingBranch}".`,
+      ),
+    );
   }
 
   /**
@@ -215,44 +246,9 @@ class StageReleaseTask {
       `${JSON.stringify(newPackageJson, null, 2)}\n`,
     );
   }
-
-  /**
-   * Verifies that the local branch is up to date with the given publish branch.
-   */
-  private verifyLocalCommitsMatchUpstream(publishBranch: string): void {
-    const upstreamCommitSha = this.git.getRemoteCommitSha(publishBranch);
-    const localCommitSha = this.git.getLocalCommitSha('HEAD');
-    console.log(localCommitSha, upstreamCommitSha);
-    // Check if the current branch is in sync with the remote branch.
-    if (upstreamCommitSha !== localCommitSha) {
-      console.error(
-        red(
-          `  ✘ Cannot stage release. The current branch is not in sync with ` +
-            `the remote branch. Please make sure your local branch "${italic(
-              publishBranch,
-            )}" is up ` +
-            `to date.`,
-        ),
-      );
-      process.exit(1);
-    }
-  }
-
-  /** Verifies that there are no uncommitted changes in the project. */
-  private verifyNoUncommittedChanges(): void {
-    if (this.git.hasUncommittedChanges()) {
-      console.error(
-        red(
-          `  ✘ Cannot stage release. ` +
-            `There are changes which are not committed and should be stashed.`,
-        ),
-      );
-      process.exit(1);
-    }
-  }
 }
 
 /** Entry-point for the release staging script. */
 if (require.main === module) {
-  new StageReleaseTask(join(__dirname, '../../'), 'angular-components').run();
+  new StageReleaseTask(join(__dirname, '../../../')).run();
 }
