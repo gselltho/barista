@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2020 Dynatrace LLC
+ * Copyright 2019 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,13 +16,13 @@
 
 import { Selector } from 'testcafe';
 
-fixture('Highcharts Setup').page('http://localhost:4200/chart');
+fixture('Pie chart').page('http://localhost:4200/chart/pie');
+const pieChart = Selector('.pie-chart .highcharts-point');
+const tooltip = Selector('.dt-chart-tooltip-overlay');
 
-const counter = async () => Selector('#change-detection-counter').textContent;
-const lineChart = Selector('.line-chart');
-
-test('change detection should only trigger docheck once on init', async (testController: TestController) => {
-  const previousCounter = await counter();
-  await testController.hover(lineChart);
-  await testController.expect(await counter()).eql(previousCounter);
+test('Pie charts having tooltips', async (testController: TestController) => {
+  await testController.wait(500);
+  await testController.hover(pieChart);
+  await testController.wait(1000);
+  await testController.expect(await tooltip.exists).ok();
 });
