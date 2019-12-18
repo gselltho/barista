@@ -14,5 +14,13 @@
  * limitations under the License.
  */
 
-// We need export a dummy root package here since ng-packagr needs one primary entry point
-export {};
+import { Module, HttpModule } from '@nestjs/common';
+import { SearchService } from './search.service';
+import { SearchController } from './search.controller';
+
+@Module({
+  imports: [HttpModule],
+  controllers: [SearchController],
+  providers: [SearchService],
+})
+export class SearchModule {}

@@ -30,12 +30,14 @@ import { BaIndexPage } from './index-page/index-page';
 import { BaOverviewPage } from './overview-page/overview-page';
 import { BaSinglePage } from './single-page/single-page';
 import { BaIconOverviewPage } from './icon-overview-page/icon-overview-page';
+import { BaSearchPage } from './search-page/search-page';
 
 const LAYOUT_PAGES_MAPPING = {
   default: BaSinglePage,
   overview: BaOverviewPage,
   iconOverview: BaIconOverviewPage,
   index: BaIndexPage,
+  search: BaSearchPage,
 };
 
 /**

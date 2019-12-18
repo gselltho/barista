@@ -14,5 +14,27 @@
  * limitations under the License.
  */
 
-// We need export a dummy root package here since ng-packagr needs one primary entry point
-export {};
+import { Module, Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { Routes, RouterModule } from 'nest-router';
+import { SearchModule } from '../search/search.module';
+
+@Controller()
+export class HealthCheckController {
+  @Get('/healthcheck')
+  @HttpCode(HttpStatus.OK)
+  health(): void {}
+}
+
+const routes: Routes = [
+  {
+    path: '/search',
+    module: SearchModule,
+  },
+];
+
+@Module({
+  imports: [RouterModule.forRoutes(routes), SearchModule],
+  controllers: [HealthCheckController],
+  providers: [],
+})
+export class AppModule {}

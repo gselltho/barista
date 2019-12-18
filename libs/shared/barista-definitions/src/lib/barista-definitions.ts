@@ -27,7 +27,8 @@ export type BaPageBuilder = (
 export type BaPageBuilderContentResult =
   | BaSinglePageContent
   | BaIndexPageContent
-  | BaIconOverviewPageContent;
+  | BaIconOverviewPageContent
+  | BaSearchPageContent;
 
 export interface BaPageBuildResult {
   relativeOutFile: string;
@@ -40,6 +41,7 @@ export const enum BaLayoutType {
   IconOverview = 'iconOverview',
   Icon = 'icon',
   Index = 'index',
+  Search = 'search',
 }
 
 export interface BaPageMetaBase {
@@ -66,6 +68,10 @@ export interface BaSinglePageMeta extends BaPageMetaBase {
 
 export interface BaSinglePageContent extends BaSinglePageMeta {
   content: string;
+}
+
+export interface BaSearchPageContent extends BaPageMetaBase {
+  layout: BaLayoutType.Search;
 }
 
 export interface BaContributors {

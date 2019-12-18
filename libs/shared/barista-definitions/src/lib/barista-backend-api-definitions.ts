@@ -14,5 +14,9 @@
  * limitations under the License.
  */
 
-// We need export a dummy root package here since ng-packagr needs one primary entry point
-export {};
+export interface BaSearchResult {
+  title: string;
+  url: string;
+  isTagMatch: boolean;
+  contentMatches: string[];
+}

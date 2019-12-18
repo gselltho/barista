@@ -14,5 +14,18 @@
  * limitations under the License.
  */
 
-// We need export a dummy root package here since ng-packagr needs one primary entry point
-export {};
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { BaSearchResult } from '@dynatrace/barista-components/barista-definitions';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class BaSearchService {
+  constructor(private readonly _http: HttpClient) {}
+
+  search(searchString: string): Observable<BaSearchResult[]> {
+    return this._http.get<BaSearchResult[]>(
+      `/api/v1/search/?q=${searchString}`,
+    );
+  }
+}

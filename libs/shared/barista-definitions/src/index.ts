@@ -15,4 +15,5 @@
  */
 
 export * from './lib/barista-definitions';
+export * from './lib/barista-backend-api-definitions';
 export * from './lib/example-definitions';
