@@ -33,7 +33,7 @@ import { CircleCiApi } from './circle-ci-api';
  */
 
 test('', async () => {
-  const client = new CircleCiApi('c35ffeecf25d457121d6d21f003110d92b5e7aa3');
+  const client = new CircleCiApi('some-token');
 
   await client.getArtefactUrlForBranch(
     'b89786da642171a16a11322236e7f9530b2f2afe',

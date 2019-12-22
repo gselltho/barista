@@ -13,7 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, {
+  AxiosInstance,
+  AxiosError,
+  AxiosBasicCredentials,
+  AxiosRequestConfig,
+} from 'axios';
 import { URL } from 'url';
 import {
   CircleServerError,
@@ -21,10 +26,41 @@ import {
   CircleWorkflow,
   CircleResponse,
   CircleJob,
+  CircleArtefact,
 } from './circle-ci.interface';
+
+const NO_PIPELINE_FOUND_ERROR = (sha: string) =>
+  `There is no pipeline for the provided commit SHA: ${sha}`;
+const WORKFLOW_NOT_FOUND_ERROR = (name: string) =>
+  `The workflow with the name: ${name} could not be found!`;
+const JOB_NOT_FOUND_ERROR = (name: string) =>
+  `The job with the name: ${name} could not be found!`;
+const SERVER_ERROR = (message: string) =>
+  `The server responded with an error: \n${message}`;
+const NO_ARTEFACTS_ERROR = (jobName: string) =>
+  `No artefacts found for the provided job ${jobName}!`;
 
 /** Abstract class that should be implemented by a CI provider */
 export abstract class ContinuosIntegrationApi {
+  /** Axios client used for HTTP requests */
+  protected _apiClient: AxiosInstance;
+
+  constructor(
+    baseUrl: string,
+    authentication: AxiosBasicCredentials,
+    options: Partial<AxiosRequestConfig> = {},
+  ) {
+    this._apiClient = axios.create({
+      baseURL: baseUrl,
+      auth: authentication,
+      responseType: 'json',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      ...options,
+    });
+  }
+
   /**
    * Returns an url where an artefact can be downloaded for a branch
    * @param branchName The branch where the artefact should be downloaded
@@ -35,36 +71,28 @@ export abstract class ContinuosIntegrationApi {
 
 const CIRCLE_API_V2 = 'https://circleci.com/api/v2/';
 const CIRCLE_PROJECT_SLUG = 'github/dynatrace-oss/barista';
+// TODO: lukas.holzer should be build, when the build stage generates an artefact.
 const CIRCLE_STAGE = 'unit-test';
 const CIRCLE_WORKFLOW_NAME = 'pr_check';
 
-const NO_PIPELINE_FOUND_ERROR = (sha: string) =>
-  `There is no pipeline for the provided commit SHA: ${sha}`;
-const WORKFLOW_NOT_FOUND_ERROR = (name: string) =>
-  `The workflow with the name: ${name} could not be found!`;
-const JOB_NOT_FOUND_ERROR = (name: string) =>
-  `The job with the name: ${name} could not be found!`;
-const SERVER_ERROR = (message: string) =>
-  `The server responded with an error: \n${message}`;
-
+/**
+ * Continuos integration provider for Circle ci that can provides
+ * an url to download a builded dist for a provided commit sha.
+ *
+ * This artefact can be downloaded later for releasing.
+ *
+ * This class is using the version 2 of the circle ci api.
+ * https://circleci.com/docs/api/v2/
+ */
 export class CircleCiApi extends ContinuosIntegrationApi {
-  _apiClient: AxiosInstance;
-
   constructor(authToken: string) {
-    super();
-    this._apiClient = axios.create({
-      baseURL: CIRCLE_API_V2,
-      auth: {
-        username: authToken,
-        password: '', // password has to be empty
-      },
-      responseType: 'json',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    super(CIRCLE_API_V2, {
+      username: authToken,
+      password: '', // password has to be empty
     });
   }
 
+  /** Get the download url to the artefact for the provided branch */
   async getArtefactUrlForBranch(commitSha: string): Promise<string> {
     const pipelines = await this._getAllPipelines();
     const branchPipeline = pipelines.find(
@@ -74,15 +102,22 @@ export class CircleCiApi extends ContinuosIntegrationApi {
     if (!branchPipeline) {
       throw Error(NO_PIPELINE_FOUND_ERROR(commitSha));
     }
-
+    // get the workflow for the pipeline
     const workflow = await this._getWorkflow(
       branchPipeline.id,
       CIRCLE_WORKFLOW_NAME,
     );
+    // get the job for the workflow
     const job = await this._getJob(workflow.id, CIRCLE_STAGE);
 
-    console.log(JSON.stringify(job, undefined, 2));
-    return 'asdf';
+    // get the artefacts for the job number
+    const artefacts = await this._getArtefacts(job.job_number);
+
+    if (!artefacts.length) {
+      throw Error(NO_ARTEFACTS_ERROR(job.name));
+    }
+
+    return artefacts[0].url;
   }
 
   /** Retrieves all the pipelines in the project */
@@ -138,6 +173,21 @@ export class CircleCiApi extends ContinuosIntegrationApi {
       }
 
       return item;
+    } catch (err) {
+      checkServerError(err);
+    }
+  }
+
+  /** Get a list of artifacts for a providecd job number */
+  private async _getArtefacts(
+    jobNumber: number | string,
+  ): Promise<CircleArtefact[]> {
+    try {
+      const response = await this._apiClient.get<
+        CircleResponse<CircleArtefact>
+      >(`/project/${CIRCLE_PROJECT_SLUG}/${jobNumber}/artifacts`);
+
+      return response.data.items;
     } catch (err) {
       checkServerError(err);
     }
