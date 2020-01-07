@@ -178,7 +178,7 @@ export class CircleCiApi extends ContinuosIntegrationApi {
     }
   }
 
-  /** Get a list of artifacts for a providecd job number */
+  /** Get a list of artifacts for a provided job number */
   private async _getArtefacts(
     jobNumber: number | string,
   ): Promise<CircleArtefact[]> {
