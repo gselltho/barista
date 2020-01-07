@@ -14,22 +14,115 @@
  * limitations under the License.
  */
 
-import { CircleCiApi } from './circle-ci-api';
-// import { AxiosInstance } from 'axios';
+import { of } from 'rxjs';
+import { TestScheduler } from 'rxjs/testing';
+import { CircleCiApi, NO_PIPELINE_FOUND_ERROR } from './circle-ci-api';
+import { NodeHTTPClient } from './node-http-client';
 
 let client: CircleCiApi;
+let testScheduler: TestScheduler;
 
-// let testFlush: any;
+beforeEach(() => {
+  client = new CircleCiApi('my-token');
+  // Set up the TestScheduler to assert with jest
+  testScheduler = new TestScheduler((actual, expected) => {
+    expect(actual).toEqual(expected);
+  });
+});
 
-// beforeEach(() => {
-//   client = new CircleCiApi('some-token');
-//   client['_apiClient'] = jest.fn(() => ({
-//     get: testFlush
-//   })) as unknown as AxiosInstance;
-// });
+test('Should throw pipeline not found error if no pipeline matches to the commit', () => {
+  const spy = jest
+    .spyOn(NodeHTTPClient.prototype, 'get')
+    .mockImplementationOnce(() => of(circleResponse([])));
 
-test('', async () => {
-  await client.getArtefactUrlForBranch(
-    'b89786da642171a16a11322236e7f9530b2f2afe',
+  const commitSha = 'some-commit-sha';
+  const stream$ = client.getArtefactUrlForBranch(commitSha);
+
+  testScheduler.run(({ expectObservable }) => {
+    expectObservable(stream$).toBe(
+      '#',
+      {},
+      Error(NO_PIPELINE_FOUND_ERROR(commitSha)),
+    );
+  });
+
+  spy.mockClear();
+});
+
+test('Should return artifacts and call appropriate urls', () => {
+  const commitSha = '1a490a8ecdd51109da733318aa61fc8da97e2b01';
+  const pipelineResponse = [pipeline(commitSha, 'workflow-id')];
+  const workflowResponse = [workflow('job-id')];
+  const jobResponse = [job('build', 'job-number')];
+  const artifactsResponse = [{ name: 'my-artefact' }];
+
+  const httpGetSpy = jest
+    .spyOn(NodeHTTPClient.prototype, 'get')
+    .mockImplementation((url, ...args) => {
+      if (url.endsWith('/pipeline')) {
+        return of(circleResponse(pipelineResponse));
+      }
+      if (url.endsWith('/workflow')) {
+        return of(circleResponse(workflowResponse));
+      }
+      if (url.endsWith('/job')) {
+        return of(circleResponse(jobResponse));
+      }
+      if (url.endsWith('artifacts')) {
+        return of(circleResponse(artifactsResponse));
+      }
+
+      return of();
+    });
+
+  const stream$ = client.getArtefactUrlForBranch(commitSha);
+
+  testScheduler.run(({ expectObservable }) => {
+    expectObservable(stream$).toBe('(a|)', {
+      a: artifactsResponse,
+    });
+  });
+
+  expect(httpGetSpy).toHaveBeenCalledTimes(4);
+  expect(httpGetSpy).toHaveBeenNthCalledWith(
+    1,
+    'project/github/dynatrace-oss/barista/pipeline',
   );
+  expect(httpGetSpy).toHaveBeenNthCalledWith(
+    2,
+    'pipeline/workflow-id/workflow',
+  );
+  expect(httpGetSpy).toHaveBeenNthCalledWith(3, 'workflow/job-id/job');
+  expect(httpGetSpy).toHaveBeenNthCalledWith(
+    4,
+    '/project/github/dynatrace-oss/barista/job-number/artifacts',
+  );
+
+  httpGetSpy.mockClear();
+});
+
+// # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+// #
+// #  F I X T U R E S
+
+const circleResponse = (items: object[]) => ({
+  next_page_token: 'some-string',
+  items,
+});
+
+const workflow = (id: string) => ({
+  id,
+  name: 'pr_check',
+});
+
+const job = (name: string, jobNumber: string) => ({
+  name,
+  job_number: jobNumber,
+});
+
+const pipeline = (commitSha: string, id: string) => ({
+  id,
+  vcs: {
+    revision: commitSha,
+  },
 });
