@@ -125,7 +125,7 @@ function verifyNoUncommittedChanges(git: GitClient): void {
   }
 }
 
-async function determineVersion(baseDir: string): Promise<Version> {
+export async function determineVersion(baseDir: string): Promise<Version> {
   const packageJsonPath = join(baseDir, 'package.json');
 
   let parsedVersion;
@@ -139,7 +139,7 @@ async function determineVersion(baseDir: string): Promise<Version> {
   return parsedVersion;
 }
 
-async function verifyGithubStatus(
+export async function verifyGithubStatus(
   git: GitClient,
   githubApi: OctokitApi,
 ): Promise<void> {
@@ -154,7 +154,7 @@ async function verifyGithubStatus(
   }
 }
 
-function verifyLocalCommitsMatchUpstream(
+export function verifyLocalCommitsMatchUpstream(
   git: GitClient,
   publishBranch: string,
 ): void {

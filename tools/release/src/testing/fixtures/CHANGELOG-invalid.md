@@ -1,20 +1,20 @@
-### 4.15.1 (2019-12-02)
+# 4.15.1 (2019-12-02)
 
-#### Bug Fixes
+### Bug Fixes
 
 - **context-dialog:** Fixes positioning issues by removing the closing button
   that tightly coupled the position to the trigger
 
-### 4.15.0 (2019-11-20)
+# 4.15.0 (2019-11-20)
 
-#### Bug Fixes
+### Bug Fixes
 
 - **chart:** Fixes an issue where the tooltip was not shown when hovering the
   same data point twice.
 - **table:** Fixes an issue that if a datasource was set to empty twice in a row
   the empty state was not visible.
 
-#### Features
+### Features
 
 - **container-breakpoint-observer:** Added the if-container-breakpoint
   structural directive for showing/hiding elements based on a container query.

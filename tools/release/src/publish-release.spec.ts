@@ -18,23 +18,26 @@ import { vol } from 'memfs';
 
 import { GitClient } from './git/git-client';
 import * as OctokitApi from '@octokit/rest';
-import { PublishReleaseTask, PackageJson } from './publish-release';
 import {
-  NO_VALID_RELEASE_BRANCH_MSG,
-  getUnsucessfulGithubStatusError,
-  getInvalidPackageJsonVersionError,
-  UNCOMMITED_CHANGES_ERROR_MSG,
-  getLocalDoesNotMatchUpstreamError,
-  CHANGELOG_PARSE_ERROR_MSG,
+  PackageJson,
+  determineVersion,
+  verifyGithubStatus,
+  verifyLocalCommitsMatchUpstream,
+} from './publish-release';
+import {
+  GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
+  GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR,
+  GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
+  CHANGELOG_PARSE_ERROR,
 } from './release-errors';
 import { getFixture } from './testing/get-fixture';
-
-let publishReleaseTask: PublishReleaseTask;
+import { shouldRelease } from './release-check';
+import { Version } from './parse-version';
+import { extractReleaseNotes } from './extract-release-notes';
 
 beforeEach(() => {
   process.chdir('/');
   vol.reset();
-  publishReleaseTask = new PublishReleaseTask('.');
 });
 
 afterEach(() => {
@@ -43,11 +46,10 @@ afterEach(() => {
 
 test('Should throw an error when no package.json is found', async () => {
   expect.assertions(1);
-
   try {
-    await publishReleaseTask.run();
+    await determineVersion(process.cwd());
   } catch (err) {
-    expect(err.message).toBe('Error while parsing json file at package.json');
+    expect(err.message).toBe('Error while parsing json file at /package.json');
   }
 });
 
@@ -60,22 +62,15 @@ test('Should throw an error if the package.json contains an invalid version', as
   expect.assertions(1);
 
   try {
-    await publishReleaseTask.run();
+    await determineVersion(process.cwd());
   } catch (err) {
     expect(err.message).toBe(
-      getInvalidPackageJsonVersionError(packageJson).message,
+      GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson),
     );
   }
 });
 
-test('Should throw an error if the branch is not a valid release branch', async () => {
-  const packageJson: PackageJson = { version: '1.2.3' };
-  vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-  });
-
-  expect.assertions(1);
-
+test('Should return false if branch is not a valid release branch', async () => {
   jest
     .spyOn(GitClient.prototype, 'getCurrentBranch')
     .mockImplementation(() => 'some-branch');
@@ -84,27 +79,12 @@ test('Should throw an error if the branch is not a valid release branch', async 
     .spyOn(GitClient.prototype, 'getLastCommit')
     .mockImplementation(() => '1234');
 
-  try {
-    await publishReleaseTask.run();
-  } catch (err) {
-    expect(err.message).toBe(NO_VALID_RELEASE_BRANCH_MSG);
-  }
+  expect(
+    shouldRelease(new GitClient(process.cwd()), new Version(4, 15, 3)),
+  ).toBe(false);
 });
 
-test('Should throw an error when the github status is not sucessful', async () => {
-  const packageJson: PackageJson = { version: '4.15.3' };
-  vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-  });
-
-  jest
-    .spyOn(GitClient.prototype, 'getCurrentBranch')
-    .mockImplementation(() => '4.15.x');
-
-  jest
-    .spyOn(GitClient.prototype, 'getLastCommit')
-    .mockImplementation(() => 'chore: Bump version to 4.15.3 w/ changelog');
-
+test('Should throw an error when the github status is not successful', async () => {
   const localCommitSha = '1234';
   jest
     .spyOn(GitClient.prototype, 'getLocalCommitSha')
@@ -114,196 +94,50 @@ test('Should throw an error when the github status is not sucessful', async () =
     data: { state: 'error' },
   } as OctokitApi.Response<OctokitApi.ReposGetCombinedStatusForRefResponse>;
 
+  const octokitApi = new OctokitApi();
   jest
-    .spyOn(publishReleaseTask.githubApi.repos, 'getCombinedStatusForRef')
+    .spyOn(octokitApi.repos, 'getCombinedStatusForRef')
     .mockImplementation(() => Promise.resolve(errorResponse));
 
   expect.assertions(1);
 
   try {
-    await publishReleaseTask.run();
+    await verifyGithubStatus(new GitClient(process.cwd()), octokitApi);
   } catch (err) {
     expect(err.message).toBe(
-      getUnsucessfulGithubStatusError(localCommitSha).message,
+      GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR(localCommitSha),
     );
-  }
-});
-
-test('Should throw an error when uncommited changes are detected locally', async () => {
-  const packageJson: PackageJson = { version: '4.15.3' };
-  vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-  });
-
-  jest
-    .spyOn(GitClient.prototype, 'getCurrentBranch')
-    .mockImplementation(() => '4.15.x');
-
-  jest
-    .spyOn(GitClient.prototype, 'getLastCommit')
-    .mockImplementation(() => 'chore: Bump version to 4.15.3 w/ changelog');
-
-  const localCommitSha = '1234';
-  jest
-    .spyOn(GitClient.prototype, 'getLocalCommitSha')
-    .mockImplementation(() => localCommitSha);
-
-  const successResponse = {
-    data: { state: 'success' },
-  } as OctokitApi.Response<OctokitApi.ReposGetCombinedStatusForRefResponse>;
-
-  jest
-    .spyOn(publishReleaseTask.githubApi.repos, 'getCombinedStatusForRef')
-    .mockImplementation(() => Promise.resolve(successResponse));
-
-  jest
-    .spyOn(GitClient.prototype, 'hasUncommittedChanges')
-    .mockImplementation(() => true);
-
-  expect.assertions(1);
-
-  try {
-    await publishReleaseTask.run();
-  } catch (err) {
-    expect(err.message).toBe(UNCOMMITED_CHANGES_ERROR_MSG);
   }
 });
 
 test('Should throw an error when the local branch does not match the upstream', async () => {
-  const packageJson: PackageJson = { version: '4.15.3' };
-  vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-  });
-
-  const localBranch = '4.15.x';
-  jest
-    .spyOn(GitClient.prototype, 'getCurrentBranch')
-    .mockImplementation(() => localBranch);
-
-  jest
-    .spyOn(GitClient.prototype, 'getLastCommit')
-    .mockImplementation(() => 'chore: Bump version to 4.15.3 w/ changelog');
-
-  const localCommitSha = '1234';
-  jest
-    .spyOn(GitClient.prototype, 'getLocalCommitSha')
-    .mockImplementation(() => localCommitSha);
-
-  const successResponse = {
-    data: { state: 'success' },
-  } as OctokitApi.Response<OctokitApi.ReposGetCombinedStatusForRefResponse>;
-
-  jest
-    .spyOn(publishReleaseTask.githubApi.repos, 'getCombinedStatusForRef')
-    .mockImplementation(() => Promise.resolve(successResponse));
-
-  jest
-    .spyOn(GitClient.prototype, 'hasUncommittedChanges')
-    .mockImplementation(() => false);
-
   jest
     .spyOn(GitClient.prototype, 'getRemoteCommitSha')
-    .mockImplementation(() => '2345');
+    .mockImplementation(() => 'xxxx');
+
+  jest
+    .spyOn(GitClient.prototype, 'getLocalCommitSha')
+    .mockImplementation(() => '1234');
+
+  const localBranch = 'master';
 
   expect.assertions(1);
-
   try {
-    await publishReleaseTask.run();
+    verifyLocalCommitsMatchUpstream(new GitClient(process.cwd()), localBranch);
   } catch (err) {
-    expect(err.message).toBe(
-      getLocalDoesNotMatchUpstreamError(localBranch).message,
-    );
+    expect(err.message).toBe(GET_LOCAL_DOES_NOT_MATCH_UPSTREAM(localBranch));
   }
 });
 
 test('Should throw an error when the changelog could not be parsed for the release notes', async () => {
-  const packageJson: PackageJson = { version: '4.15.3' };
   vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-    '/CHANGELOG.md': getFixture('CHANGELOG-invalid.md'),
+    'CHANGELOG.md': getFixture('CHANGELOG-invalid.md'),
   });
-
-  const localBranch = '4.15.x';
-  jest
-    .spyOn(GitClient.prototype, 'getCurrentBranch')
-    .mockImplementation(() => localBranch);
-
-  jest
-    .spyOn(GitClient.prototype, 'getLastCommit')
-    .mockImplementation(() => 'chore: Bump version to 4.15.3 w/ changelog');
-
-  const localCommitSha = '1234';
-  jest
-    .spyOn(GitClient.prototype, 'getLocalCommitSha')
-    .mockImplementation(() => localCommitSha);
-
-  const successResponse = {
-    data: { state: 'success' },
-  } as OctokitApi.Response<OctokitApi.ReposGetCombinedStatusForRefResponse>;
-
-  jest
-    .spyOn(publishReleaseTask.githubApi.repos, 'getCombinedStatusForRef')
-    .mockImplementation(() => Promise.resolve(successResponse));
-
-  jest
-    .spyOn(GitClient.prototype, 'hasUncommittedChanges')
-    .mockImplementation(() => false);
-
-  jest
-    .spyOn(GitClient.prototype, 'getRemoteCommitSha')
-    .mockImplementation(() => localCommitSha);
-
   expect.assertions(1);
 
   try {
-    await publishReleaseTask.run();
+    extractReleaseNotes('CHANGELOG.md', '4.15.1');
   } catch (err) {
-    expect(err.message).toBe(CHANGELOG_PARSE_ERROR_MSG);
-  }
-});
-
-test('Should throw an error when the changelog could not be parsed for the release notes', async () => {
-  const packageJson: PackageJson = { version: '4.15.3' };
-  vol.fromJSON({
-    '/package.json': JSON.stringify(packageJson),
-    '/CHANGELOG.md': getFixture('CHANGELOG-invalid.md'),
-  });
-
-  const localBranch = '4.15.x';
-  jest
-    .spyOn(GitClient.prototype, 'getCurrentBranch')
-    .mockImplementation(() => localBranch);
-
-  jest
-    .spyOn(GitClient.prototype, 'getLastCommit')
-    .mockImplementation(() => 'chore: Bump version to 4.15.3 w/ changelog');
-
-  const localCommitSha = '1234';
-  jest
-    .spyOn(GitClient.prototype, 'getLocalCommitSha')
-    .mockImplementation(() => localCommitSha);
-
-  const successResponse = {
-    data: { state: 'success' },
-  } as OctokitApi.Response<OctokitApi.ReposGetCombinedStatusForRefResponse>;
-
-  jest
-    .spyOn(publishReleaseTask.githubApi.repos, 'getCombinedStatusForRef')
-    .mockImplementation(() => Promise.resolve(successResponse));
-
-  jest
-    .spyOn(GitClient.prototype, 'hasUncommittedChanges')
-    .mockImplementation(() => false);
-
-  jest
-    .spyOn(GitClient.prototype, 'getRemoteCommitSha')
-    .mockImplementation(() => localCommitSha);
-
-  expect.assertions(1);
-
-  try {
-    await publishReleaseTask.run();
-  } catch (err) {
-    expect(err.message).toBe(CHANGELOG_PARSE_ERROR_MSG);
+    expect(err.message).toBe(CHANGELOG_PARSE_ERROR);
   }
 });

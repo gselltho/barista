@@ -15,7 +15,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { CHANGELOG_PARSE_ERROR_MSG } from './release-errors';
+import { CHANGELOG_PARSE_ERROR } from './release-errors';
 
 export interface ReleaseNotes {
   releaseTitle: string;
@@ -36,7 +36,7 @@ export function extractReleaseNotes(
   // The end of the section will be matched by just looking for the first
   // subsequent release header.
   const releaseNotesRegex = new RegExp(
-    `##? (${escapedVersion}) \\(\\d{4}-\\d{2}-\\d{2}\\) ?(.*?)##? \\d+\\.\\d+`,
+    `## (${escapedVersion}) \\(\\d{4}-\\d{2}-\\d{2}\\) ?(.*?)##? \\d+\\.\\d+`,
     's',
   );
   const matches = releaseNotesRegex.exec(changelogContent);
@@ -47,6 +47,6 @@ export function extractReleaseNotes(
       releaseNotes: matches[2].trim(),
     };
   } else {
-    throw new Error(CHANGELOG_PARSE_ERROR_MSG);
+    throw new Error(CHANGELOG_PARSE_ERROR);
   }
 }
