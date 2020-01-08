@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2019 Dynatrace LLC
+ * Copyright 2020 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -23,7 +23,7 @@ let client: CircleCiApi;
 let testScheduler: TestScheduler;
 
 beforeEach(() => {
-  client = new CircleCiApi('my-token');
+  client = new CircleCiApi('a41b8755a116f4b26eaf17b5d390b13f1834212b');
   // Set up the TestScheduler to assert with jest
   testScheduler = new TestScheduler((actual, expected) => {
     expect(actual).toEqual(expected);
@@ -36,7 +36,7 @@ test('Should throw pipeline not found error if no pipeline matches to the commit
     .mockImplementationOnce(() => of(circleResponse([])));
 
   const commitSha = 'some-commit-sha';
-  const stream$ = client.getArtefactUrlForBranch(commitSha);
+  const stream$ = client.getArtifactUrlForBranch(commitSha);
 
   testScheduler.run(({ expectObservable }) => {
     expectObservable(stream$).toBe(
@@ -54,11 +54,11 @@ test('Should return artifacts and call appropriate urls', () => {
   const pipelineResponse = [pipeline(commitSha, 'workflow-id')];
   const workflowResponse = [workflow('job-id')];
   const jobResponse = [job('build', 'job-number')];
-  const artifactsResponse = [{ name: 'my-artefact' }];
+  const artifactsResponse = [{ name: 'my-artifact' }];
 
   const httpGetSpy = jest
     .spyOn(NodeHTTPClient.prototype, 'get')
-    .mockImplementation((url, ...args) => {
+    .mockImplementation((url, ..._args) => {
       if (url.endsWith('/pipeline')) {
         return of(circleResponse(pipelineResponse));
       }
@@ -75,7 +75,7 @@ test('Should return artifacts and call appropriate urls', () => {
       return of();
     });
 
-  const stream$ = client.getArtefactUrlForBranch(commitSha);
+  const stream$ = client.getArtifactUrlForBranch(commitSha);
 
   testScheduler.run(({ expectObservable }) => {
     expectObservable(stream$).toBe('(a|)', {

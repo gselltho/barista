@@ -15,6 +15,7 @@
  */
 
 import { readFileSync } from 'fs';
+import { CHANGELOG_PARSE_ERROR_MSG } from './release-errors';
 
 export interface ReleaseNotes {
   releaseTitle: string;
@@ -27,7 +28,7 @@ export function extractReleaseNotes(
   versionName: string,
 ): ReleaseNotes {
   const changelogContent = readFileSync(changelogPath, 'utf8');
-  const escapedVersion = versionName.replace('.', '\\.');
+  const escapedVersion = versionName.replace(/\./g, '\\.');
 
   // Regular expression that matches the release notes for the given version. Note that we specify
   // the "s" RegExp flag so that the line breaks will be ignored within our regex. We determine the
@@ -35,16 +36,17 @@ export function extractReleaseNotes(
   // The end of the section will be matched by just looking for the first
   // subsequent release header.
   const releaseNotesRegex = new RegExp(
-    `(## (\[${escapedVersion}]\(.*?\)) \(.*?)## \[?\d+\.\d+`,
+    `##? (${escapedVersion}) \\(\\d{4}-\\d{2}-\\d{2}\\) ?(.*?)##? \\d+\\.\\d+`,
     's',
   );
   const matches = releaseNotesRegex.exec(changelogContent);
   if (matches) {
+    // TODO extract release notes and populate the tag via the github api
     return {
-      releaseNotes: matches[1].trim(),
-      releaseTitle: matches[2],
+      releaseTitle: matches[1],
+      releaseNotes: matches[2].trim(),
     };
   } else {
-    throw new Error('  ✘   Could not find release notes in the changelog.');
+    throw new Error(CHANGELOG_PARSE_ERROR_MSG);
   }
 }

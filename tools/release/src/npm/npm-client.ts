@@ -20,7 +20,7 @@ import { spawnSync } from 'child_process';
 export function npmPublish(packagePath: string): string | null {
   const result = spawnSync(
     'npm',
-    ['publish', '--access', 'public', '--tag', 'latest'],
+    ['publish', '--access', 'public', '--tag', 'latest', '--dry-run'],
     {
       cwd: packagePath,
       shell: true,

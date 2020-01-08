@@ -39,7 +39,8 @@
     "stage-release": "ng build release-tools && node dist/tools/release/stage-release.js",
     "release-check": "ng build release-tools && node dist/tools/release/release-check.js",
     "create-tag": "ng build release-tools && node dist/tools/release/create-tag.js",
-    "breaking-changes": "gulp breaking-changes"
+    "breaking-changes": "gulp breaking-changes",
+    "publish-release": "ts-node -P tools/release/tsconfig.json tools/release/src/publish-release.ts"
   },
   "author": "Dynatrace",
   "license": "SEE LICENSE IN LICENSE",
@@ -111,6 +112,7 @@
     "@types/node": "^12.12.14",
     "@types/sass-graph": "^2.1.2",
     "@types/stylelint": "^9.10.0",
+    "@types/tar-fs": "^1.16.1",
     "@types/through2": "^2.0.33",
     "@types/xml2js": "^0.4.5",
     "axe-core": "^3.4.0",
@@ -139,6 +141,7 @@
     "jest-preset-angular": "^7.1.1",
     "markdown-it": "^10.0.0",
     "markdown-it-deflist": "^2.0.3",
+    "memfs": "^3.0.3",
     "merge2": "^1.2.3",
     "ng-packagr": "^5.7.1",
     "nodemon": "^1.19.3",
@@ -153,6 +156,7 @@
     "stylelint-config-prettier": "^5.2.0",
     "stylelint-prettier": "^1.1.1",
     "stylelint-scss": "^3.12.1",
+    "tar-fs": "^2.0.0",
     "testcafe": "^1.6.1",
     "testcafe-browser-provider-browserstack": "^1.9.0",
     "testcafe-reporter-xunit": "^2.1.0",

@@ -741,6 +741,14 @@
             "tsConfig": ["tools/release/tsconfig.json"],
             "exclude": ["**/node_modules/**", "!tools/release/**"]
           }
+        },
+        "test": {
+          "builder": "@nrwl/jest:jest",
+          "options": {
+            "jestConfig": "tools/release/jest.config.js",
+            "tsConfig": "tools/release/tsconfig.spec.json",
+            "setupFile": "tools/release/src/test-setup.ts"
+          }
         }
       }
     },

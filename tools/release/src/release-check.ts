@@ -33,7 +33,6 @@ export function shouldRelease(git: GitClient, version: Version): boolean {
     const allowedBranch = getAllowedPublishBranch(version);
 
     const commit = git.getLastCommit();
-
     return (
       Boolean(branch) &&
       branch === allowedBranch &&

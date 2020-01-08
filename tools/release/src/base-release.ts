@@ -23,6 +23,10 @@ import {
   GITHUB_REPO_NAME,
 } from './git/github-urls';
 import { prompt } from 'inquirer';
+import {
+  UNCOMMITED_CHANGES_ERROR_MSG,
+  getLocalDoesNotMatchUpstreamError,
+} from './release-errors';
 
 interface PackageJson {
   version: string;
@@ -45,13 +49,7 @@ export class BaseReleaseTask {
   /** Verifies that there are no uncommitted changes in the project. */
   protected verifyNoUncommittedChanges(): void {
     if (this.git.hasUncommittedChanges()) {
-      console.error(
-        red(
-          `  ✘ Cannot stage release. ` +
-            `There are changes which are not committed and should be stashed.`,
-        ),
-      );
-      process.exit(1);
+      throw new Error(UNCOMMITED_CHANGES_ERROR_MSG);
     }
   }
 
@@ -63,16 +61,7 @@ export class BaseReleaseTask {
     const localCommitSha = this.git.getLocalCommitSha('HEAD');
     // Check if the current branch is in sync with the remote branch.
     if (upstreamCommitSha !== localCommitSha) {
-      console.error(
-        red(
-          `  ✘ The current branch is not in sync with ` +
-            `the remote branch. Please make sure your local branch "${italic(
-              publishBranch,
-            )}" is up ` +
-            `to date.`,
-        ),
-      );
-      process.exit(1);
+      throw getLocalDoesNotMatchUpstreamError(publishBranch);
     }
   }
 

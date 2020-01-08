@@ -14,17 +14,38 @@
  * limitations under the License.
  */
 
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { green, bold, red, italic, yellow } from 'chalk';
 import { Version, parseVersionName } from './parse-version';
 import { shouldRelease } from './release-check';
 import { CHANGELOG_FILE_NAME } from './changelog';
-import { extractReleaseNotes, ReleaseNotes } from './extract-release-notes';
-import { verifyPublishBranch } from './publish-branch';
+import { ReleaseNotes, extractReleaseNotes } from './extract-release-notes';
 import { GITHUB_REPO_OWNER, GITHUB_REPO_NAME } from './git/github-urls';
-import { promises as fs } from 'fs';
+import {
+  promises as fs,
+  createReadStream,
+  createWriteStream,
+  readFile,
+  readFileSync,
+  writeFile,
+  writeFileSync,
+  mkdirSync,
+} from 'fs';
 import { npmPublish } from './npm/npm-client';
 import { BaseReleaseTask } from './base-release';
+import { CircleCiApi } from './circle-ci-api/circle-ci-api';
+import Axios from 'axios';
+import {
+  NO_VALID_RELEASE_BRANCH_MSG,
+  getInvalidPackageJsonVersionError,
+  getUnsucessfulGithubStatusError,
+  getLocalTagAlreadyExistsButDoesNotMatchError,
+  getTagAlreadyExistsError,
+  getTagPushError,
+  getTagAlreadyExistsOnRemoteError,
+  BUNDLE_VERSION_ERROR_MSG,
+} from './release-errors';
+import { spawnSync, ExecOptions, exec } from 'child_process';
 
 const BUNDLE_PATH = 'dist/release';
 
@@ -32,9 +53,11 @@ const BUNDLE_PATH = 'dist/release';
  * Class that can be instantiated in order to create a new release. The tasks requires user
  * interaction/input through command line prompts.
  */
-class PublishReleaseTask extends BaseReleaseTask {
+export class PublishReleaseTask extends BaseReleaseTask {
   /** Path to the release output of the project. */
   releaseOutputPath: string;
+
+  circleCiApi: CircleCiApi = new CircleCiApi('my-token');
 
   constructor(public projectDir: string) {
     super(projectDir);
@@ -52,11 +75,7 @@ class PublishReleaseTask extends BaseReleaseTask {
 
     // verify if we should release
     if (!shouldRelease(this.git, version)) {
-      console.error(
-        red('We are not on a valid release branch -- aborting release'),
-      );
-      process.exit(1);
-      return;
+      throw new Error(NO_VALID_RELEASE_BRANCH_MSG);
     }
 
     // check that the build was successful
@@ -65,18 +84,23 @@ class PublishReleaseTask extends BaseReleaseTask {
     // verify uncommited changes
     this.verifyNoUncommittedChanges();
 
-    // verify publish branch
-    verifyPublishBranch(version, this.git);
+    const currentBranch = this.git.getCurrentBranch();
 
     // get last commit from branch
-    this.verifyLocalCommitsMatchUpstream(this.git.getCurrentBranch());
+    this.verifyLocalCommitsMatchUpstream(currentBranch);
 
     // request build id for commit on remote
+    const circleArtitfact = await this.circleCiApi
+      .getArtifactUrlForBranch(currentBranch)
+      .toPromise();
 
     // download artifact from circle
+    await this._downloadTarFile(circleArtitfact[0].url);
+
+    await this._extractTarFile();
 
     // check release bundle (verify version in package.json)
-    this.verifyBundle(version);
+    this.verifyBundle(version, 'DUMMY_PATH');
 
     // extract release notes
     const releaseNotes = extractReleaseNotes(
@@ -84,10 +108,10 @@ class PublishReleaseTask extends BaseReleaseTask {
       version.format(),
     );
     const tagName = version.format();
-    // create release tag
+    // // create release tag
     this.createReleaseTag(tagName, releaseNotes);
 
-    // push release tag to github
+    // // push release tag to github
     this.pushReleaseTag(tagName);
 
     // safety net - confirm publish again
@@ -110,10 +134,7 @@ class PublishReleaseTask extends BaseReleaseTask {
 
     parsedVersion = parseVersionName(packageJson.version);
     if (!parsedVersion) {
-      throw new Error(
-        `Cannot parse current version in ${italic('package.json')}. Please ` +
-          `make sure "${this.packageJson.version}" is a valid Semver version.`,
-      );
+      throw getInvalidPackageJsonVersionError(packageJson);
     }
     return parsedVersion;
   }
@@ -126,32 +147,20 @@ class PublishReleaseTask extends BaseReleaseTask {
       ref: commitSha,
     })).data;
     if (state !== 'success') {
-      console.error(
-        red(
-          `The commit "${commitSha}" did not pass all github checks! Aborting...`,
-        ),
-      );
-      process.exit(1);
+      throw getUnsucessfulGithubStatusError(commitSha);
     }
   }
 
-  private async verifyBundle(version: Version): Promise<void> {
-    const bundlePath = join(this.projectDir, BUNDLE_PATH);
-    const bundleName = `barista-components-${version.format()}.tar`;
-
-    // TODO untar
+  private async verifyBundle(
+    version: Version,
+    bundlePath: string,
+  ): Promise<void> {
     const bundlePackageJson = await tryJsonParse<PackageJson>(
-      join(bundlePath, bundleName, 'package.json'),
+      join(bundlePath, 'package.json'),
     );
     const parsedBundleVersion = parseVersionName(bundlePackageJson.version);
     if (!parsedBundleVersion || !parsedBundleVersion.equals(version)) {
-      console.error(
-        red(
-          '  ✘ We detected a mismatch between the version in the package.json from the artifact' +
-            'and the version in your current branch. Make sure that the downloaed artifact is the correct one.',
-        ),
-      );
-      process.exit(1);
+      throw new Error(BUNDLE_VERSION_ERROR_MSG);
     }
   }
 
@@ -160,13 +169,7 @@ class PublishReleaseTask extends BaseReleaseTask {
       const expectedSha = this.git.getLocalCommitSha('HEAD');
 
       if (this.git.getShaOfLocalTag(tagName) !== expectedSha) {
-        console.error(
-          red(
-            `  ✘   Tag "${tagName}" already exists locally, but does not refer ` +
-              `to the version bump commit. Please delete the tag if you want to proceed.`,
-          ),
-        );
-        process.exit(1);
+        throw getLocalTagAlreadyExistsButDoesNotMatchError(tagName);
       }
 
       console.log(
@@ -175,13 +178,7 @@ class PublishReleaseTask extends BaseReleaseTask {
     } else if (this.git.createTag(tagName, releaseNotes.releaseTitle)) {
       console.log(green(`  ✓   Created release tag: "${italic(tagName)}"`));
     } else {
-      console.error(
-        red(
-          `  ✘   Could not create the "${tagName}" tag.` +
-            '    Please make sure there is no existing tag with the same name.',
-        ),
-      );
-      process.exit(1);
+      throw getTagAlreadyExistsError(tagName);
     }
   }
 
@@ -193,13 +190,7 @@ class PublishReleaseTask extends BaseReleaseTask {
     // The remote tag SHA is empty if the tag does not exist in the remote repository.
     if (remoteTagSha) {
       if (remoteTagSha !== expectedSha) {
-        console.error(
-          red(
-            `  ✘   Tag "${tagName}" already exists on the remote, but does not ` +
-              `refer to the version bump commit.`,
-          ),
-        );
-        process.exit(1);
+        throw getTagAlreadyExistsOnRemoteError(tagName);
       }
 
       console.log(
@@ -211,8 +202,7 @@ class PublishReleaseTask extends BaseReleaseTask {
     }
 
     if (!this.git.pushBranchOrTagToRemote(tagName)) {
-      console.error(red(`  ✘   Could not push the "${tagName}" tag upstream.`));
-      process.exit(1);
+      throw getTagPushError(tagName);
     }
 
     console.log(green(`  ✓   Pushed release tag upstream.`));
@@ -231,6 +221,35 @@ class PublishReleaseTask extends BaseReleaseTask {
       process.exit(0);
     }
   }
+
+  private async _downloadTarFile(url: string): Promise<void> {
+    const destination = resolve(process.cwd(), 'dist');
+    const writer = createWriteStream(destination);
+
+    const response = await Axios({
+      url,
+      method: 'GET',
+      responseType: 'stream',
+    });
+
+    response.data.pipe(writer);
+
+    return new Promise((res, reject) => {
+      writer.on('finish', res);
+      writer.on('error', reject);
+    });
+  }
+
+  private async _extractTarFile(): Promise<void> {
+    await fs.mkdir(resolve(process.cwd(), 'tmp'), { recursive: true });
+    await executeCommand(
+      `tar -xzf ${resolve(
+        process.cwd(),
+        'dist',
+        'barista-components.gz',
+      )} -C tmp`,
+    );
+  }
 }
 
 /** Publishes the specified package. */
@@ -241,16 +260,11 @@ function publishPackageToNpm(bundlePath: string): void {
 
   if (errorOutput) {
     throw new Error(
-      red(`  ✘   An error occurred while publishing barista-components.`),
+      `  ✘   An error occurred while publishing barista-components.`,
     );
   }
 
   console.info(green('  ✓   Successfully published'));
-}
-
-/** Entry-point for the create release script. */
-if (require.main === module) {
-  new PublishReleaseTask(join(__dirname, '../../')).run();
 }
 
 /** Tries to parse a json file and throws an error if parsing fails */
@@ -264,10 +278,46 @@ async function tryJsonParse<T>(path: string): Promise<T> {
 
 export interface PackageJson {
   version: string;
-  peerDependencies: {
+  peerDependencies?: {
     [key: string]: string;
   };
-  dependencies: {
+  dependencies?: {
     [key: string]: string;
   };
+}
+
+/**
+ * Spawns a shell then executes the command within that shell
+ */
+export async function executeCommand(
+  command: string,
+  cwd?: string,
+): Promise<string> {
+  const maxBuffer = 1024 * 1024 * 10;
+
+  const options: ExecOptions = {
+    cwd: cwd || process.cwd(),
+    maxBuffer,
+  };
+
+  return new Promise((resolve, reject) => {
+    exec(command, options, (err, stdout, stderr) => {
+      if (err !== null) {
+        reject(stdout);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
+
+/** Entry-point for the create release script. */
+if (require.main === module) {
+  new PublishReleaseTask(join(__dirname, '../../'))
+    .run()
+    .then()
+    .catch(error => {
+      console.error(error);
+      process.exit(1);
+    });
 }

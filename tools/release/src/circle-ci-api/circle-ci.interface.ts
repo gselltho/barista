@@ -154,8 +154,8 @@ export interface CircleJob {
   approved_by?: string;
 }
 
-/** Circle ci jobs  artifact	object */
-export interface CircleArtefact {
+/** Circle ci jobs  artifact object */
+export interface CircleArtifact {
   /** The artifact path. */
   path: string;
   /** The index of the node that stored the artifact. */

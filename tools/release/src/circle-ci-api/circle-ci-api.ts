@@ -17,18 +17,17 @@ import { AxiosBasicCredentials, AxiosRequestConfig } from 'axios';
 import { Observable, OperatorFunction } from 'rxjs';
 import { map, switchMap, tap } from 'rxjs/operators';
 import {
-  CircleArtefact,
+  CircleArtifact,
   CircleJob,
   CirclePipeline,
   CircleResponse,
   CircleWorkflow,
 } from './circle-ci.interface';
 import { NodeHTTPClient } from './node-http-client';
-import { inspect } from 'util';
 
 const CIRCLE_API_V2 = 'https://circleci.com/api/v2/';
 const CIRCLE_PROJECT_SLUG = 'github/dynatrace-oss/barista';
-const CIRCLE_STAGE = 'build';
+const CIRCLE_STAGE = 'store-build-artifacts';
 const CIRCLE_WORKFLOW_NAME = 'pr_check';
 
 export const ITEM_NOT_FOUND_ERROR = 'Could not find the item in the list';
@@ -41,8 +40,8 @@ export const JOB_NOT_FOUND_ERROR = (name: string) =>
   `The job with the name: ${name} could not be found!`;
 export const SERVER_ERROR = (message: string) =>
   `The server responded with an error: \n${message}`;
-export const NO_ARTEFACTS_ERROR = (jobName: string) =>
-  `No artefacts found for the provided job ${jobName}!`;
+export const NO_ARTIFACTS_ERROR = (jobName: string) =>
+  `No artifacts found for the provided job ${jobName}!`;
 
 /** Abstract class that should be implemented by a CI provider */
 export abstract class ContinuosIntegrationApi {
@@ -66,18 +65,20 @@ export abstract class ContinuosIntegrationApi {
   }
 
   /**
-   * Returns an url where an artefact can be downloaded for a branch
-   * @param branchName The branch where the artefact should be downloaded
+   * Returns an url where an artifact can be downloaded for a branch
+   * @param branchName The branch where the artifact should be downloaded
    * @param stage The stage where it was created
    */
-  abstract getArtefactUrlForBranch(commitSha: string): Observable<string>;
+  abstract getArtifactUrlForBranch(
+    commitSha: string,
+  ): Observable<CircleArtifact[]>;
 }
 
 /**
  * Continuos integration provider for Circle ci that can provides
  * an url to download a builded dist for a provided commit sha.
  *
- * This artefact can be downloaded later for releasing.
+ * This artifact can be downloaded later for releasing.
  *
  * This class is using the version 2 of the circle ci api.
  * https://circleci.com/docs/api/v2/
@@ -90,14 +91,14 @@ export class CircleCiApi extends ContinuosIntegrationApi {
     });
   }
 
-  /** Get the download url to the artefact for the provided branch */
-  getArtefactUrlForBranch(commitSha: string): Observable<any> {
+  /** Get the download url to the artifact for the provided branch */
+  getArtifactUrlForBranch(commitSha: string): Observable<CircleArtifact[]> {
     return this._getPipeline(commitSha).pipe(
       switchMap(pipeline =>
         this._getWorkflow(pipeline.id, CIRCLE_WORKFLOW_NAME),
       ),
       switchMap(workflow => this._getJob(workflow.id, CIRCLE_STAGE)),
-      switchMap(job => this._getArtefacts(job)),
+      switchMap(job => this._getArtifacts(job)),
     );
   }
 
@@ -114,7 +115,7 @@ export class CircleCiApi extends ContinuosIntegrationApi {
           }
         }),
         filterResponse<CirclePipeline>(
-          pipeline => pipeline.vcs.revision === commitSha,
+          pipeline => pipeline.vcs!.revision === commitSha,
           NO_PIPELINE_FOUND_ERROR(commitSha),
         ),
       );
@@ -148,16 +149,16 @@ export class CircleCiApi extends ContinuosIntegrationApi {
   }
 
   /** Get a list of artifacts for a provided job number */
-  private _getArtefacts(job: CircleJob): Observable<CircleArtefact[]> {
+  private _getArtifacts(job: CircleJob): Observable<CircleArtifact[]> {
     return this._apiClient
-      .get<CircleResponse<CircleArtefact>>(
+      .get<CircleResponse<CircleArtifact>>(
         `/project/${CIRCLE_PROJECT_SLUG}/${job.job_number}/artifacts`,
       )
       .pipe(
         map(response => response.items),
-        tap(artefacts => {
-          if (!artefacts || !artefacts.length) {
-            throw new Error(NO_ARTEFACTS_ERROR(job.name));
+        tap(artifacts => {
+          if (!artifacts || !artifacts.length) {
+            throw new Error(NO_ARTIFACTS_ERROR(job.name));
           }
         }),
       );

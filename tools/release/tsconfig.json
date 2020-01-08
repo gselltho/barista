@@ -1,7 +1,6 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "jest"],
     "outDir": "../../dist/tools/release",
     "rootDir": "src",
     "target": "esnext",
