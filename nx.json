@@ -40,6 +40,9 @@
     "release-tools": {
       "tags": ["type:tooling"]
     },
+    "tools-shared": {
+      "tags": ["type:tooling", "type:shared"]
+    },
     "shared-barista-definitions": {
       "tags": ["type:types"]
     },

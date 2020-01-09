@@ -19,7 +19,6 @@ import { vol } from 'memfs';
 import { GitClient } from './git/git-client';
 import * as OctokitApi from '@octokit/rest';
 import {
-  PackageJson,
   determineVersion,
   verifyGithubStatus,
   verifyLocalCommitsMatchUpstream,
@@ -34,6 +33,7 @@ import { getFixture } from './testing/get-fixture';
 import { shouldRelease } from './release-check';
 import { Version } from './parse-version';
 import { extractReleaseNotes } from './extract-release-notes';
+import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
 beforeEach(() => {
   process.chdir('/');

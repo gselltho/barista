@@ -1,6 +1,3 @@
-import { PackageJson } from './publish-release';
-import { italic } from 'chalk';
-
 /**
  * @license
  * Copyright 2020 Dynatrace LLC
@@ -16,6 +13,10 @@ import { italic } from 'chalk';
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+import { italic } from 'chalk';
+
+export const NO_TOKENS_PROVIDED_ERROR = `Please ensure that you provide the CIRCLE_CI_TOKEN and the NPM_PUBLISH_TOKEN for the script`;
 
 export const GET_INVALID_PACKAGE_JSON_VERSION_ERROR = packageJson =>
   `Cannot parse current version in ${italic('package.json')}. Please ` +

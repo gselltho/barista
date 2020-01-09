@@ -15,7 +15,7 @@
  */
 
 import { existsSync, createWriteStream, promises as fs } from 'fs';
-import { executeCommand } from '../../util/execute-command';
+import { executeCommand } from '@dynatrace/barista-components/tools/shared';
 import Axios from 'axios';
 
 /**

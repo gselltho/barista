@@ -14,32 +14,6 @@
  * limitations under the License.
  */
 
-import { promises as fs } from 'fs';
-
-/**
- * Tries to parse a json file and throws an error if parsing fails
- * @throws Will throw if the json cannot be parsed
- */
-export async function tryJsonParse<T>(path: string): Promise<T> {
-  try {
-    return JSON.parse(await fs.readFile(path, { encoding: 'utf-8' }));
-  } catch (err) {
-    throw new Error(`Error while parsing json file at ${path}`);
-  }
-}
-
-export interface AngularJson {
-  projects: {
-    [key: string]: {
-      root: string;
-    };
-  };
-}
-
-export interface NgPackagerJson {
-  dest: string;
-}
-
 export interface PackageJson {
   version?: string;
   peerDependencies?: {
