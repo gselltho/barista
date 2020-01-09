@@ -14,5 +14,11 @@
  * limitations under the License.
  */
 
-export * from './mock-intersection-observer';
-export * from './mock-object-property';
+/** Mocks an object property with the provided value */
+export const mockObjectProperty = <T extends {}, K extends keyof T>(
+  object: T,
+  property: K,
+  value: T[K],
+) => {
+  Object.defineProperty(object, property, { get: () => value });
+};

@@ -14,45 +14,39 @@
  * limitations under the License.
  */
 
-import { join } from 'path';
-import { green, bold, red } from 'chalk';
-import { Version, parseVersionName } from './parse-version';
-import { shouldRelease } from './release-check';
-import { CHANGELOG_FILE_NAME } from './changelog';
-import { extractReleaseNotes } from './extract-release-notes';
-import { GITHUB_REPO_OWNER, GITHUB_REPO_NAME } from './git/github-urls';
-import { npmPublish } from './npm/npm-client';
-import { CircleCiApi } from './circle-ci-api/circle-ci-api';
 import {
+  PackageJson,
+  tryJsonParse,
+} from '@dynatrace/barista-components/tools/shared';
+import * as OctokitApi from '@octokit/rest';
+import { bold, green, red } from 'chalk';
+import { config as dotenvConfig } from 'dotenv';
+import { join } from 'path';
+import { CHANGELOG_FILE_NAME } from './changelog';
+import { CircleCiApi } from './circle-ci-api/circle-ci-api';
+import { extractReleaseNotes } from './extract-release-notes';
+import { downloadFile, extractTarFile } from './file-operations';
+import { GitClient } from './git/git-client';
+import { verifyGithubStatus } from './git/verify-github-status';
+import { npmPublish } from './npm/npm-client';
+import { parseVersionName, Version } from './parse-version';
+import { promptConfirmReleasePublish } from './prompts';
+import { shouldRelease } from './release-check';
+import {
+  BUNDLE_VERSION_ERROR,
+  GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
+  GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
+  NO_TOKENS_PROVIDED_ERROR,
   NO_VALID_RELEASE_BRANCH_ERROR,
   UNCOMMITED_CHANGES_ERROR,
-  GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
-  GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR,
-  GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
-  BUNDLE_VERSION_ERROR,
-  NO_TOKENS_PROVIDED_ERROR,
 } from './release-errors';
-import { GitClient } from './git/git-client';
-import * as OctokitApi from '@octokit/rest';
 import { createReleaseTag, pushReleaseTag } from './tagging';
-import { promptConfirmReleasePublish } from './prompts';
-import { downloadFile, extractTarFile } from './file-operations';
-import {
-  tryJsonParse,
-  PackageJson,
-} from '@dynatrace/barista-components/tools/shared';
-
-import { config as dotenvConfig } from 'dotenv';
 
 // load the environment variables from the .env file in your workspace
 dotenvConfig();
 
 /** The root of the barista git repo where the git commands should be executed */
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
-/** Private token for the circle ci */
-const CIRCLE_CI_TOKEN = process.env.CIRCLE_CI_TOKEN;
-/** Token to publish in the registry */
-const NPM_PUBLISH_TOKEN = process.env.NPM_PUBLISH_TOKEN;
 
 /** The temporary folder where the dist should be unpacked */
 const TAR_DESTINATION = join(WORKSPACE_ROOT, 'tmp');
@@ -63,15 +57,20 @@ const BUNDLE_NAME = 'barista-components.tar.gz';
  * requires user interaction/input through command line prompts.
  */
 export async function publishRelease(): Promise<void> {
-  console.log();
-  console.log(green('-----------------------------------------'));
-  console.log(green(bold('  Dynatrace Barista components release script')));
-  console.log(green('-----------------------------------------'));
-  console.log();
+  /** Private token for the circle ci */
+  const CIRCLE_CI_TOKEN = process.env.CIRCLE_CI_TOKEN;
+  /** Token to publish in the registry */
+  const NPM_PUBLISH_TOKEN = process.env.NPM_PUBLISH_TOKEN;
 
   if (!CIRCLE_CI_TOKEN || !NPM_PUBLISH_TOKEN) {
     throw new Error(NO_TOKENS_PROVIDED_ERROR);
   }
+
+  console.info();
+  console.info(green('-----------------------------------------'));
+  console.info(green(bold('  Dynatrace Barista components release script')));
+  console.info(green('-----------------------------------------'));
+  console.info();
 
   // The ci api to get the latest build artifacts
   const circleCiApi = new CircleCiApi(CIRCLE_CI_TOKEN);
@@ -81,6 +80,9 @@ export async function publishRelease(): Promise<void> {
 
   // Octokit API instance that can be used to make Github API calls.
   const githubApi = new OctokitApi();
+
+  // TODO: fabian.friedl do we really have to check the workspace package version?
+  // we are releasing only the downloaded dist -> this package.json we have to check
 
   // determine version
   const version = await determineVersion(WORKSPACE_ROOT);
@@ -167,25 +169,6 @@ export async function determineVersion(baseDir: string): Promise<Version> {
     throw new Error(GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson));
   }
   return parsedVersion;
-}
-
-/**
- * Verifies that the github status for the latest local commit passed
- * @throws Will throw if the state is not successful
- */
-export async function verifyGithubStatus(
-  git: GitClient,
-  githubApi: OctokitApi,
-): Promise<void> {
-  const commitSha = git.getLocalCommitSha('HEAD');
-  const { state } = (await githubApi.repos.getCombinedStatusForRef({
-    owner: GITHUB_REPO_OWNER,
-    repo: GITHUB_REPO_NAME,
-    ref: commitSha,
-  })).data;
-  if (state !== 'success') {
-    throw new Error(GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR(commitSha));
-  }
 }
 
 /**

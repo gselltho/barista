@@ -20,22 +20,26 @@ import { GitClient } from './git/git-client';
 import * as OctokitApi from '@octokit/rest';
 import {
   determineVersion,
-  verifyGithubStatus,
   verifyLocalCommitsMatchUpstream,
+  publishRelease,
 } from './publish-release';
+import * as git from './git';
 import {
   GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
   GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR,
   GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
   CHANGELOG_PARSE_ERROR,
+  NO_TOKENS_PROVIDED_ERROR,
 } from './release-errors';
 import { getFixture } from './testing/get-fixture';
-import { shouldRelease } from './release-check';
+import * as releaseCheck from './release-check';
 import { Version } from './parse-version';
 import { extractReleaseNotes } from './extract-release-notes';
 import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
 beforeEach(() => {
+  // Mock console logs away we don't want to bloat the output
+  jest.spyOn(console, 'info').mockImplementation();
   process.chdir('/');
   vol.reset();
 });
@@ -80,7 +84,10 @@ test('Should return false if branch is not a valid release branch', async () => 
     .mockImplementation(() => '1234');
 
   expect(
-    shouldRelease(new GitClient(process.cwd()), new Version(4, 15, 3)),
+    releaseCheck.shouldRelease(
+      new GitClient(process.cwd()),
+      new Version(4, 15, 3),
+    ),
   ).toBe(false);
 });
 
@@ -102,7 +109,7 @@ test('Should throw an error when the github status is not successful', async () 
   expect.assertions(1);
 
   try {
-    await verifyGithubStatus(new GitClient(process.cwd()), octokitApi);
+    await git.verifyGithubStatus(new GitClient(process.cwd()), octokitApi);
   } catch (err) {
     expect(err.message).toBe(
       GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR(localCommitSha),
@@ -140,4 +147,44 @@ test('Should throw an error when the changelog could not be parsed for the relea
   } catch (err) {
     expect(err.message).toBe(CHANGELOG_PARSE_ERROR);
   }
+});
+
+test('should throw when no circle ci token is provide', async () => {
+  expect.assertions(1);
+
+  try {
+    await publishRelease();
+  } catch (error) {
+    expect(error.message).toBe(NO_TOKENS_PROVIDED_ERROR);
+  }
+});
+
+test('should throw when no npm publish token is provide', async () => {
+  process.env.CIRCLE_CI_TOKEN = 'my-token';
+  expect.assertions(1);
+
+  try {
+    await publishRelease();
+  } catch (error) {
+    expect(error.message).toBe(NO_TOKENS_PROVIDED_ERROR);
+  }
+});
+
+// tslint:disable-next-line: dt-no-focused-tests
+describe.only('publish release', () => {
+  beforeEach(() => {
+    process.env.CIRCLE_CI_TOKEN = '87c589ff2b354f46f223c9915583d3ff476776e7';
+    process.env.NPM_PUBLISH_TOKEN = 'my-token';
+
+    jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
+    jest.spyOn(git, 'verifyGithubStatus').mockImplementation();
+
+    vol.fromJSON({
+      '/package.json': JSON.stringify({ version: '5.0.0' }),
+    });
+  });
+
+  test('', async () => {
+    await publishRelease();
+  });
 });
