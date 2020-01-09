@@ -31,342 +31,194 @@ import { promptForNewVersion } from './new-version-prompt';
 import { Version, parseVersionName } from './parse-version';
 import { getAllowedPublishBranch } from './publish-branch';
 import { promptConfirm } from './prompts';
+import {
+  determineVersion,
+  verifyLocalCommitsMatchUpstream,
+} from './publish-release';
+import {
+  tryJsonParse,
+  PackageJson,
+} from '@dynatrace/barista-components/tools/shared';
+import { verifyPassingGithubStatus } from './git/status-check';
+import {
+  GET_FAILED_CREATE_STAGING_BRANCH_ERROR,
+  ABORT_RELEASE,
+  GET_BRANCH_SWITCH_ERROR,
+  GET_PUSH_RELEASE_BRANCH_ERROR,
+  GET_PR_CREATION_ERROR,
+} from './release-errors';
 
-class StageReleaseTask {
-  /** Path to the project package JSON. */
-  packageJsonPath: string;
+/** The root of the barista git repo where the git commands should be executed */
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
-  /** Serialized package.json of the specified project. */
-  packageJson: any;
+async function stageRelease(): Promise<void> {
+  console.log();
+  console.log(cyan('-----------------------------------------------------'));
+  console.log(cyan('  Dynatrace Angular Components stage release script'));
+  console.log(cyan('-----------------------------------------------------'));
+  console.log();
 
-  /** Parsed current version of the project. */
-  currentVersion: Version;
+  // Instance of a wrapper that can execute Git commands.
+  const gitClient = new GitClient(WORKSPACE_ROOT);
 
-  /** Instance of a wrapper that can execute Git commands. */
-  git: GitClient;
+  // Octokit API instance that can be used to make Github API calls.
+  const githubApi = new OctokitApi();
 
-  /** Octokit API instance that can be used to make Github API calls. */
-  githubApi: OctokitApi;
+  // determine version
+  const currentVersion = await determineVersion(WORKSPACE_ROOT);
+  const packageJsonPath = join(WORKSPACE_ROOT, 'package.json');
+  const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
 
-  constructor(public projectDir: string) {
-    this.packageJsonPath = join(projectDir, 'package.json');
+  const newVersion = await promptForNewVersion(currentVersion);
+  const newVersionName = newVersion.format();
+  const needsVersionBump = !newVersion.equals(currentVersion);
+  const stagingBranch = `release-stage/${newVersionName}`;
 
-    if (!existsSync(this.packageJsonPath)) {
-      console.error(
-        red(
-          `The specified directory is not referring to a project directory. ` +
-            `There must be a ${italic(
-              'package.json',
-            )} file in the project directory.`,
-        ),
-      );
-      process.exit(1);
-    }
+  console.log();
 
-    this.packageJson = JSON.parse(readFileSync(this.packageJsonPath, 'utf-8'));
-    this.currentVersion = parseVersionName(this.packageJson.version)!;
+  this.verifyNoUncommittedChanges();
 
-    if (!this.currentVersion) {
-      console.error(
-        red(
-          `Cannot parse current version in ${italic('package.json')}. Please ` +
-            `make sure "${this.packageJson.version}" is a valid ` +
-            `Semver version.`,
-        ),
-      );
-      process.exit(1);
-    }
+  // Branch that will be used to stage the release for the
+  // new selected version.
+  const publishBranch = switchToPublishBranch(gitClient, newVersion);
 
-    this.git = new GitClient(projectDir);
-    this.githubApi = new OctokitApi();
+  verifyLocalCommitsMatchUpstream(gitClient, publishBranch);
+  await verifyPassingGithubStatus(gitClient, githubApi, publishBranch);
+
+  if (!gitClient.checkoutNewBranch(stagingBranch)) {
+    throw new Error(GET_FAILED_CREATE_STAGING_BRANCH_ERROR(stagingBranch));
   }
 
-  async run(): Promise<void> {
-    console.log();
-    console.log(cyan('-----------------------------------------------------'));
-    console.log(cyan('  Dynatrace Angular Components stage release script'));
-    console.log(cyan('-----------------------------------------------------'));
-    console.log();
+  if (needsVersionBump) {
+    updatePackageJsonVersion(packageJson, packageJsonPath, newVersionName);
 
-    const newVersion = await promptForNewVersion(this.currentVersion);
-    const newVersionName = newVersion.format();
-    const needsVersionBump = !newVersion.equals(this.currentVersion);
-    const stagingBranch = `release-stage/${newVersionName}`;
-
-    console.log();
-
-    this.verifyNoUncommittedChanges();
-
-    // Branch that will be used to stage the release for the
-    // new selected version.
-    const publishBranch = this._switchToPublishBranch(newVersion);
-
-    this.verifyLocalCommitsMatchUpstream(publishBranch);
-    await this._verifyPassingGithubStatus(publishBranch);
-
-    if (!this.git.checkoutNewBranch(stagingBranch)) {
-      console.error(
-        red(
-          `Could not create release staging branch: ${stagingBranch}. ` +
-            `Aborting...`,
-        ),
-      );
-      process.exit(1);
-    }
-
-    if (needsVersionBump) {
-      this.updatePackageJsonVersion(newVersionName);
-
-      console.log(
-        green(
-          `  ✓   Updated the version to "${bold(
-            newVersionName,
-          )}" inside of the ${italic('package.json')}`,
-        ),
-      );
-      console.log();
-    }
-
-    await promptAndGenerateChangelog(
-      join(this.projectDir, CHANGELOG_FILE_NAME),
-      '',
-    );
-
-    console.log();
     console.log(
-      green(`  ✓   Updated the changelog in "${bold(CHANGELOG_FILE_NAME)}"`),
-    );
-    console.log(
-      yellow(
-        `  ⚠   Please review CHANGELOG.md and ensure that the log ` +
-          `contains only changes that apply to the public library release. ` +
-          `When done, proceed to the prompt below.`,
+      green(
+        `  ✓   Updated the version to "${bold(
+          newVersionName,
+        )}" inside of the ${italic('package.json')}`,
       ),
     );
     console.log();
-
-    if (
-      !(await promptConfirm('Do you want to proceed and commit the changes?'))
-    ) {
-      console.log();
-      console.log(yellow('Aborting release staging...'));
-      process.exit(1);
-    }
-
-    this.git.stageAllChanges();
-
-    if (needsVersionBump) {
-      this.git.createNewCommit(getReleaseCommit(newVersionName));
-    } else {
-      this.git.createNewCommit(`chore: Update changelog for ${newVersionName}`);
-    }
-
-    console.info();
-    console.info(
-      green(`  ✓   Created the staging commit for: "${newVersionName}".`),
-    );
-    console.info();
-
-    // Pushing
-    if (!this.git.pushBranchOrTagToRemote(stagingBranch)) {
-      console.error(
-        red(
-          `Could not push release staging branch "${stagingBranch}" to remote`,
-        ),
-      );
-      process.exit(1);
-    }
-    console.info(
-      green(
-        `  ✓   Pushed release staging branch "${stagingBranch}" to remote.`,
-      ),
-    );
-
-    const prTitle = needsVersionBump
-      ? 'Bump version to ${version} w/ changelog'
-      : 'Update changelog for ${newVersionName}';
-    const { state } = (await this.githubApi.pulls.create({
-      title: prTitle,
-      head: stagingBranch,
-      base: 'master',
-      owner: GITHUB_REPO_OWNER,
-      repo: GITHUB_REPO_NAME,
-    })).data;
-
-    if (state === 'failure') {
-      console.error(
-        red(
-          `Could not push create a pull-request for release staging branch "${stagingBranch}"` +
-            `Please create the pull-request named "${prTitle}" by hand.`,
-        ),
-      );
-      process.exit(1);
-    }
-    console.info(
-      green(
-        `  ✓   Created the pull-request "${prTitle}" for the release staging branch "${stagingBranch}".`,
-      ),
-    );
   }
 
-  /**
-   * Checks if the user is on an allowed publish branch
-   * for the specified version.
-   */
-  private _switchToPublishBranch(newVersion: Version): string {
-    const allowedBranch = getAllowedPublishBranch(newVersion);
-    const currentBranchName = this.git.getCurrentBranch();
+  await promptAndGenerateChangelog(
+    join(WORKSPACE_ROOT, CHANGELOG_FILE_NAME),
+    '',
+  );
 
-    // If current branch already matches one of the allowed publish branches,
-    // just continue by exiting this function and returning the currently
-    // used publish branch.
-    if (allowedBranch === currentBranchName) {
-      console.log(
-        green(`  ✓   Using the "${italic(currentBranchName)}" branch.`),
-      );
-      return currentBranchName;
-    } else {
-      if (!this.git.checkoutBranch(allowedBranch)) {
-        console.error(
-          red(
-            `  ✘   Could not switch to the "${italic(allowedBranch)}" ` +
-              `branch.`,
-          ),
-        );
-        console.error(
-          red(
-            `      Please ensure that the branch exists or manually switch ` +
-              `to the branch.`,
-          ),
-        );
-        process.exit(1);
-      }
+  console.log();
+  console.log(
+    green(`  ✓   Updated the changelog in "${bold(CHANGELOG_FILE_NAME)}"`),
+  );
+  console.log(
+    yellow(
+      `  ⚠   Please review CHANGELOG.md and ensure that the log ` +
+        `contains only changes that apply to the public library release. ` +
+        `When done, proceed to the prompt below.`,
+    ),
+  );
+  console.log();
 
-      console.log(
-        green(`  ✓   Switched to the "${italic(allowedBranch)}" branch.`),
-      );
-    }
-    return allowedBranch;
+  if (
+    !(await promptConfirm('Do you want to proceed and commit the changes?'))
+  ) {
+    throw new Error(yellow(ABORT_RELEASE));
   }
 
-  /**
-   * Updates the version of the project package.json and
-   * writes the changes to disk.
-   */
-  private updatePackageJsonVersion(newVersionName: string): void {
-    const newPackageJson = { ...this.packageJson, version: newVersionName };
-    writeFileSync(
-      this.packageJsonPath,
-      `${JSON.stringify(newPackageJson, null, 2)}\n`,
+  gitClient.stageAllChanges();
+
+  if (needsVersionBump) {
+    gitClient.createNewCommit(getReleaseCommit(newVersionName));
+  } else {
+    gitClient.createNewCommit(`chore: Update changelog for ${newVersionName}`);
+  }
+
+  console.info();
+  console.info(
+    green(`  ✓   Created the staging commit for: "${newVersionName}".`),
+  );
+  console.info();
+
+  // Pushing
+  if (!gitClient.pushBranchOrTagToRemote(stagingBranch)) {
+    throw new Error(red(GET_PUSH_RELEASE_BRANCH_ERROR(stagingBranch)));
+  }
+  console.info(
+    green(`  ✓   Pushed release staging branch "${stagingBranch}" to remote.`),
+  );
+
+  const prTitle = needsVersionBump
+    ? 'Bump version to ${version} w/ changelog'
+    : 'Update changelog for ${newVersionName}';
+  const { state } = (await this.githubApi.pulls.create({
+    title: prTitle,
+    head: stagingBranch,
+    base: 'master',
+    owner: GITHUB_REPO_OWNER,
+    repo: GITHUB_REPO_NAME,
+  })).data;
+
+  if (state === 'failure') {
+    throw new Error(red(GET_PR_CREATION_ERROR(stagingBranch, prTitle)));
+  }
+  console.info(
+    green(
+      `  ✓   Created the pull-request "${prTitle}" for the release staging branch "${stagingBranch}".`,
+    ),
+  );
+}
+
+/**
+ * Checks if the user is on an allowed publish branch
+ * for the specified version.
+ */
+function switchToPublishBranch(git: GitClient, newVersion: Version): string {
+  const allowedBranch = getAllowedPublishBranch(newVersion);
+  const currentBranchName = git.getCurrentBranch();
+
+  // If current branch already matches one of the allowed publish branches,
+  // just continue by exiting this function and returning the currently
+  // used publish branch.
+  if (allowedBranch === currentBranchName) {
+    console.log(
+      green(`  ✓   Using the "${italic(currentBranchName)}" branch.`),
+    );
+    return currentBranchName;
+  } else {
+    if (!git.checkoutBranch(allowedBranch)) {
+      throw new Error(red(GET_BRANCH_SWITCH_ERROR(allowedBranch)));
+    }
+
+    console.log(
+      green(`  ✓   Switched to the "${italic(allowedBranch)}" branch.`),
     );
   }
+  return allowedBranch;
+}
 
-  /**
-   * Verifies that the local branch is up to date with the given publish branch.
-   */
-  private verifyLocalCommitsMatchUpstream(publishBranch: string): void {
-    const upstreamCommitSha = this.git.getRemoteCommitSha(publishBranch);
-    const localCommitSha = this.git.getLocalCommitSha('HEAD');
-    console.log(localCommitSha, upstreamCommitSha);
-    // Check if the current branch is in sync with the remote branch.
-    if (upstreamCommitSha !== localCommitSha) {
-      console.error(
-        red(
-          `  ✘ Cannot stage release. The current branch is not in sync with ` +
-            `the remote branch. Please make sure your local branch "${italic(
-              publishBranch,
-            )}" is up ` +
-            `to date.`,
-        ),
-      );
-      process.exit(1);
-    }
-  }
-
-  /** Verifies that there are no uncommitted changes in the project. */
-  private verifyNoUncommittedChanges(): void {
-    if (this.git.hasUncommittedChanges()) {
-      console.error(
-        red(
-          `  ✘ Cannot stage release. ` +
-            `There are changes which are not committed and should be stashed.`,
-        ),
-      );
-      process.exit(1);
-    }
-  }
-
-  /** Verifies that the latest commit of the current branch is passing all Github statuses. */
-  private async _verifyPassingGithubStatus(
-    expectedPublishBranch: string,
-  ): Promise<void> {
-    const commitRef = this.git.getLocalCommitSha('HEAD');
-    const githubCommitsUrl = getGithubBranchCommitsUrl(
-      GITHUB_REPO_OWNER,
-      GITHUB_REPO_NAME,
-      expectedPublishBranch,
-    );
-    const { state } = (await this.githubApi.repos.getCombinedStatusForRef({
-      owner: GITHUB_REPO_OWNER,
-      repo: GITHUB_REPO_NAME,
-      ref: commitRef,
-    })).data;
-
-    if (state === 'failure') {
-      console.error(
-        red(
-          `  ✘   Cannot stage release. Commit "${commitRef}" does not pass all github ` +
-            `status checks. Please make sure this commit passes all checks before re-running.`,
-        ),
-      );
-      console.error(red(`      Please have a look at: ${githubCommitsUrl}`));
-
-      if (
-        await promptConfirm(
-          'Do you want to ignore the Github status and proceed?',
-        )
-      ) {
-        console.info(
-          green(
-            `  ⚠   Upstream commit is failing CI checks, but status has been ` +
-              `forcibly ignored.`,
-          ),
-        );
-        return;
-      }
-      process.exit(1);
-    } else if (state === 'pending') {
-      console.error(
-        red(
-          `  ✘   Commit "${commitRef}" still has pending github statuses that ` +
-            `need to succeed before staging a release.`,
-        ),
-      );
-      console.error(red(`      Please have a look at: ${githubCommitsUrl}`));
-
-      if (
-        await promptConfirm(
-          'Do you want to ignore the Github status and proceed?',
-        )
-      ) {
-        console.info(
-          green(
-            `  ⚠   Upstream commit is pending CI, but status has been ` +
-              `forcibly ignored.`,
-          ),
-        );
-        return;
-      }
-      process.exit(0);
-    }
-
-    console.info(
-      green(`  ✓   Upstream commit is passing all github status checks.`),
-    );
-  }
+/**
+ * Updates the version of the project package.json and
+ * writes the changes to disk.
+ */
+function updatePackageJsonVersion(
+  packageJson: PackageJson,
+  packageJsonPath: string,
+  newVersionName: string,
+): void {
+  const newPackageJson = { ...packageJson, version: newVersionName };
+  writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(newPackageJson, null, 2)}\n`,
+  );
 }
 
 /** Entry-point for the release staging script. */
 if (require.main === module) {
-  new StageReleaseTask(join(__dirname, '../../../')).run();
+  stageRelease()
+    .then()
+    .catch(error => {
+      console.log(error);
+      process.exit(0);
+    });
 }

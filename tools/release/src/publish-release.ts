@@ -27,7 +27,7 @@ import { CircleCiApi } from './circle-ci-api/circle-ci-api';
 import { extractReleaseNotes } from './extract-release-notes';
 import { downloadFile, extractTarFile } from './file-operations';
 import { GitClient } from './git/git-client';
-import { verifyGithubStatus } from './git/verify-github-status';
+import { verifyPassingGithubStatus } from './git/status-check';
 import { npmPublish } from './npm/npm-client';
 import { parseVersionName, Version } from './parse-version';
 import { promptConfirmReleasePublish } from './prompts';
@@ -93,7 +93,7 @@ export async function publishRelease(): Promise<void> {
   }
 
   // check that the build was successful
-  await verifyGithubStatus(gitClient, githubApi);
+  await verifyPassingGithubStatus(gitClient, githubApi);
 
   // verify un-commited changes
   verifyNoUncommittedChanges(gitClient);

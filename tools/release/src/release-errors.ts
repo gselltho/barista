@@ -15,15 +15,25 @@
  */
 
 import { italic } from 'chalk';
+import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
 export const NO_TOKENS_PROVIDED_ERROR = `Please ensure that you provide the CIRCLE_CI_TOKEN and the NPM_PUBLISH_TOKEN for the script`;
 
-export const GET_INVALID_PACKAGE_JSON_VERSION_ERROR = packageJson =>
+export const GET_INVALID_PACKAGE_JSON_VERSION_ERROR = (
+  packageJson: PackageJson,
+) =>
   `Cannot parse current version in ${italic('package.json')}. Please ` +
   `make sure "${packageJson.version}" is a valid Semver version.`;
 
-export const GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR = (commitSha: string) =>
+export const GET_GITHUB_STATUS_FAILED_ERROR = (commitSha: string) =>
   `The commit "${commitSha}" did not pass all github checks! Aborting...`;
+
+export const GET_GITHUB_STATUS_PENDING_ERROR = (
+  commitSha: string,
+  githubCommitsUrl: string,
+) =>
+  `  ✘   Commit "${commitSha}" still has pending github statuses that ` +
+  `need to succeed before staging a release. Please have a look at: ${githubCommitsUrl}`;
 
 export const GET_LOCAL_DOES_NOT_MATCH_UPSTREAM = (publishBranch: string) =>
   `  ✘ The current branch is not in sync with ` +
@@ -58,3 +68,20 @@ export const GET_TAG_PUSH_ERROR = (tagName: string) =>
 export const BUNDLE_VERSION_ERROR =
   '  ✘ We detected a mismatch between the version in the package.json from the artifact' +
   'and the version in your current branch. Make sure that the downloaed artifact is the correct one.';
+
+export const GET_FAILED_CREATE_STAGING_BRANCH_ERROR = (stagingBranch: string) =>
+  `Could not create release staging branch: ${stagingBranch}. Aborting...`;
+
+export const ABORT_RELEASE = 'Aborting release staging...';
+
+export const GET_BRANCH_SWITCH_ERROR = (allowedBranch: string) =>
+  `  ✘   Could not switch to the "${italic(allowedBranch)}" branch.\n` +
+  `      Please ensure that the branch exists or manually switch ` +
+  `to the branch.`;
+
+export const GET_PUSH_RELEASE_BRANCH_ERROR = (stagingBranch: string) =>
+  `Could not push release staging branch "${stagingBranch}" to remote`;
+
+export const GET_PR_CREATION_ERROR = (stagingBranch: string, prTitle: string) =>
+  `Could not push create a pull-request for release staging branch "${stagingBranch}"` +
+  `Please create the pull-request named "${prTitle}" by hand.`;
