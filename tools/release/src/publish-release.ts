@@ -91,14 +91,13 @@ export async function publishRelease(): Promise<void> {
   if (!shouldRelease(gitClient, version)) {
     throw new Error(NO_VALID_RELEASE_BRANCH_ERROR);
   }
+  const currentBranch = gitClient.getCurrentBranch();
 
   // check that the build was successful
-  await verifyPassingGithubStatus(gitClient, githubApi);
+  await verifyPassingGithubStatus(gitClient, githubApi, currentBranch);
 
   // verify un-commited changes
   verifyNoUncommittedChanges(gitClient);
-
-  const currentBranch = gitClient.getCurrentBranch();
 
   // verify local commits match upstream
   verifyLocalCommitsMatchUpstream(gitClient, currentBranch);
