@@ -27,20 +27,21 @@ import { CircleCiApi } from './circle-ci-api/circle-ci-api';
 import { extractReleaseNotes } from './extract-release-notes';
 import { downloadFile, extractTarFile } from './file-operations';
 import { GitClient } from './git/git-client';
-import { verifyPassingGithubStatus } from './git/status-check';
 import { npmPublish } from './npm/npm-client';
-import { parseVersionName, Version } from './parse-version';
+import { parseVersionName, Version, determineVersion } from './parse-version';
 import { promptConfirmReleasePublish } from './prompts';
 import { shouldRelease } from './release-check';
 import {
   BUNDLE_VERSION_ERROR,
-  GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
-  GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
   NO_TOKENS_PROVIDED_ERROR,
   NO_VALID_RELEASE_BRANCH_ERROR,
-  UNCOMMITED_CHANGES_ERROR,
 } from './release-errors';
 import { createReleaseTag, pushReleaseTag } from './tagging';
+import {
+  verifyPassingGithubStatus,
+  verifyLocalCommitsMatchUpstream,
+  verifyNoUncommittedChanges,
+} from './git';
 
 // load the environment variables from the .env file in your workspace
 dotenvConfig();
@@ -81,10 +82,7 @@ export async function publishRelease(): Promise<void> {
   // Octokit API instance that can be used to make Github API calls.
   const githubApi = new OctokitApi();
 
-  // TODO: fabian.friedl do we really have to check the workspace package version?
-  // we are releasing only the downloaded dist -> this package.json we have to check
-
-  // determine version
+  // determine version for the check whether we should release from this branch
   const version = await determineVersion(WORKSPACE_ROOT);
 
   // verify if we should release
@@ -106,8 +104,6 @@ export async function publishRelease(): Promise<void> {
   const circleArtitfact = await circleCiApi
     .getArtifactUrlForBranch(currentBranch)
     .toPromise();
-
-  console.log(circleArtitfact);
 
   // download the tar file
   await downloadFile(TAR_DESTINATION, circleArtitfact[0].url);
@@ -139,52 +135,6 @@ export async function publishRelease(): Promise<void> {
   console.log(green(bold(`  ✓   Published successfully`)));
 
   // publish TADA!🥳
-}
-
-/**
- * Verifies that there are no uncommited changes
- * @throws Will throw an error if there are uncommited changes
- */
-function verifyNoUncommittedChanges(git: GitClient): void {
-  if (git.hasUncommittedChanges()) {
-    throw new Error(UNCOMMITED_CHANGES_ERROR);
-  }
-}
-
-/**
- * Reads the package json in the given baseDir
- * and tries to parse the version as a semantic version
- * @throws Will throw if no package.json is found or the version cannot be parsed
- */
-export async function determineVersion(baseDir: string): Promise<Version> {
-  const packageJsonPath = join(baseDir, 'package.json');
-
-  let parsedVersion;
-
-  const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
-
-  parsedVersion = parseVersionName(packageJson.version || '');
-  if (!parsedVersion) {
-    throw new Error(GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson));
-  }
-  return parsedVersion;
-}
-
-/**
- * Verifies that all commits have been pushed to the upstream
- * @throws Will throw an error if the local commit does not match the latest
- * upstream commit
- */
-export function verifyLocalCommitsMatchUpstream(
-  git: GitClient,
-  publishBranch: string,
-): void {
-  const upstreamCommitSha = git.getRemoteCommitSha(publishBranch);
-  const localCommitSha = git.getLocalCommitSha('HEAD');
-  // Check if the current branch is in sync with the remote branch.
-  if (upstreamCommitSha !== localCommitSha) {
-    throw new Error(GET_LOCAL_DOES_NOT_MATCH_UPSTREAM(publishBranch));
-  }
 }
 
 /**
@@ -228,6 +178,7 @@ if (require.main === module) {
     .then()
     .catch(error => {
       console.log(red(error));
+      // deliberately set to 0 so we don't have the error stacktrace in the console
       process.exit(0);
     });
 }

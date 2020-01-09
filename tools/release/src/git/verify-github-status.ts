@@ -16,24 +16,70 @@
 
 import * as OctokitApi from '@octokit/rest';
 import { GitClient } from './git-client';
-import { GITHUB_REPO_OWNER, GITHUB_REPO_NAME } from './github-urls';
-import { GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR } from '../release-errors';
+import {
+  GITHUB_REPO_OWNER,
+  GITHUB_REPO_NAME,
+  getGithubBranchCommitsUrl,
+} from './github-urls';
+import {
+  GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
+  GET_GITHUB_STATUS_PENDING_ERROR,
+  GET_GITHUB_STATUS_FAILED_ERROR,
+  UNCOMMITED_CHANGES_ERROR,
+} from '../release-errors';
 
 /**
  * Verifies that the github status for the latest local commit passed
  * @throws Will throw if the state is not successful
  */
-export async function verifyGithubStatus(
+export async function verifyPassingGithubStatus(
   git: GitClient,
   githubApi: OctokitApi,
+  branchName: string,
 ): Promise<void> {
+  const githubCommitsUrl = getGithubBranchCommitsUrl(
+    GITHUB_REPO_OWNER,
+    GITHUB_REPO_NAME,
+    branchName,
+  );
   const commitSha = git.getLocalCommitSha('HEAD');
   const { state } = (await githubApi.repos.getCombinedStatusForRef({
     owner: GITHUB_REPO_OWNER,
     repo: GITHUB_REPO_NAME,
     ref: commitSha,
   })).data;
-  if (state !== 'success') {
-    throw new Error(GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR(commitSha));
+  if (state === 'pending') {
+    throw new Error(
+      GET_GITHUB_STATUS_PENDING_ERROR(commitSha, githubCommitsUrl),
+    );
+  } else if (state === 'error') {
+    throw new Error(GET_GITHUB_STATUS_FAILED_ERROR(commitSha));
+  }
+}
+
+/**
+ * Verifies that all commits have been pushed to the upstream
+ * @throws Will throw an error if the local commit does not match the latest
+ * upstream commit
+ */
+export function verifyLocalCommitsMatchUpstream(
+  git: GitClient,
+  publishBranch: string,
+): void {
+  const upstreamCommitSha = git.getRemoteCommitSha(publishBranch);
+  const localCommitSha = git.getLocalCommitSha('HEAD');
+  // Check if the current branch is in sync with the remote branch.
+  if (upstreamCommitSha !== localCommitSha) {
+    throw new Error(GET_LOCAL_DOES_NOT_MATCH_UPSTREAM(publishBranch));
+  }
+}
+
+/**
+ * Verifies that there are no uncommited changes
+ * @throws Will throw an error if there are uncommited changes
+ */
+export function verifyNoUncommittedChanges(git: GitClient): void {
+  if (git.hasUncommittedChanges()) {
+    throw new Error(UNCOMMITED_CHANGES_ERROR);
   }
 }

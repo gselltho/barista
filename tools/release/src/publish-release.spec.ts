@@ -18,22 +18,18 @@ import { vol } from 'memfs';
 
 import { GitClient } from './git/git-client';
 import * as OctokitApi from '@octokit/rest';
-import {
-  determineVersion,
-  verifyLocalCommitsMatchUpstream,
-  publishRelease,
-} from './publish-release';
+import { publishRelease } from './publish-release';
 import * as git from './git';
 import {
   GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
-  GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR,
   GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
   CHANGELOG_PARSE_ERROR,
   NO_TOKENS_PROVIDED_ERROR,
+  GET_GITHUB_STATUS_FAILED_ERROR,
 } from './release-errors';
 import { getFixture } from './testing/get-fixture';
 import * as releaseCheck from './release-check';
-import { Version } from './parse-version';
+import { Version, determineVersion } from './parse-version';
 import { extractReleaseNotes } from './extract-release-notes';
 import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
@@ -109,11 +105,13 @@ test('Should throw an error when the github status is not successful', async () 
   expect.assertions(1);
 
   try {
-    await git.verifyGithubStatus(new GitClient(process.cwd()), octokitApi);
-  } catch (err) {
-    expect(err.message).toBe(
-      GET_UNSUCCESSFUL_GITHUB_STATUS_ERROR(localCommitSha),
+    await git.verifyPassingGithubStatus(
+      new GitClient(process.cwd()),
+      octokitApi,
+      'branch',
     );
+  } catch (err) {
+    expect(err.message).toBe(GET_GITHUB_STATUS_FAILED_ERROR(localCommitSha));
   }
 });
 
@@ -130,7 +128,10 @@ test('Should throw an error when the local branch does not match the upstream', 
 
   expect.assertions(1);
   try {
-    verifyLocalCommitsMatchUpstream(new GitClient(process.cwd()), localBranch);
+    git.verifyLocalCommitsMatchUpstream(
+      new GitClient(process.cwd()),
+      localBranch,
+    );
   } catch (err) {
     expect(err.message).toBe(GET_LOCAL_DOES_NOT_MATCH_UPSTREAM(localBranch));
   }
@@ -177,7 +178,7 @@ describe.only('publish release', () => {
     process.env.NPM_PUBLISH_TOKEN = 'my-token';
 
     jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
-    jest.spyOn(git, 'verifyGithubStatus').mockImplementation();
+    jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
 
     vol.fromJSON({
       '/package.json': JSON.stringify({ version: '5.0.0' }),

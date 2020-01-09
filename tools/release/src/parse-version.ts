@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+import { join } from 'path';
+import { GET_INVALID_PACKAGE_JSON_VERSION_ERROR } from './release-errors';
+import {
+  PackageJson,
+  tryJsonParse,
+} from '@dynatrace/barista-components/tools/shared';
+
 /**
  * Regular expression that matches version names and
  * the individual version segments.
@@ -64,4 +71,23 @@ export function serializeVersion(newVersion: Version): string {
   const { major, minor, patch } = newVersion;
 
   return `${major}.${minor}.${patch}`;
+}
+
+/**
+ * Reads the package json in the given baseDir
+ * and tries to parse the version as a semantic version
+ * @throws Will throw if no package.json is found or the version cannot be parsed
+ */
+export async function determineVersion(baseDir: string): Promise<Version> {
+  const packageJsonPath = join(baseDir, 'package.json');
+
+  let parsedVersion;
+
+  const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
+
+  parsedVersion = parseVersionName(packageJson.version || '');
+  if (!parsedVersion) {
+    throw new Error(GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson));
+  }
+  return parsedVersion;
 }

@@ -14,32 +14,29 @@
  * limitations under the License.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import {
+  tryJsonParse,
+  PackageJson,
+} from '@dynatrace/barista-components/tools/shared';
+import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { bold, cyan, green, italic, red, yellow } from 'chalk';
 import * as OctokitApi from '@octokit/rest';
 
 import { promptAndGenerateChangelog, CHANGELOG_FILE_NAME } from './changelog';
 import { getReleaseCommit } from './release-check';
-import { GitClient } from './git/git-client';
 import {
-  getGithubBranchCommitsUrl,
+  GitClient,
+  verifyNoUncommittedChanges,
+  verifyLocalCommitsMatchUpstream,
   GITHUB_REPO_OWNER,
   GITHUB_REPO_NAME,
-} from './git/github-urls';
+  verifyPassingGithubStatus,
+} from './git';
 import { promptForNewVersion } from './new-version-prompt';
-import { Version, parseVersionName } from './parse-version';
+import { Version, determineVersion } from './parse-version';
 import { getAllowedPublishBranch } from './publish-branch';
 import { promptConfirm } from './prompts';
-import {
-  determineVersion,
-  verifyLocalCommitsMatchUpstream,
-} from './publish-release';
-import {
-  tryJsonParse,
-  PackageJson,
-} from '@dynatrace/barista-components/tools/shared';
-import { verifyPassingGithubStatus } from './git/status-check';
 import {
   GET_FAILED_CREATE_STAGING_BRANCH_ERROR,
   ABORT_RELEASE,
@@ -76,7 +73,7 @@ async function stageRelease(): Promise<void> {
 
   console.log();
 
-  this.verifyNoUncommittedChanges();
+  verifyNoUncommittedChanges(gitClient);
 
   // Branch that will be used to stage the release for the
   // new selected version.
@@ -219,6 +216,7 @@ if (require.main === module) {
     .then()
     .catch(error => {
       console.log(error);
+      // deliberately set to 0 so we don't have the error stacktrace in the console
       process.exit(0);
     });
 }
