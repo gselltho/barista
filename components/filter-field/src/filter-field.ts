@@ -68,6 +68,9 @@ import {
   switchMap,
   take,
   takeUntil,
+  map,
+  distinctUntilChanged,
+  tap,
 } from 'rxjs/operators';
 
 import {
@@ -195,6 +198,13 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
   private _dataSubscription: Subscription | null;
   private _stateChanges = new Subject<void>();
   private _outsideClickSubscription: Subscription | null;
+
+  /**
+   * Locks the inputfield from receiving additional keyEvents
+   * to prevent race conditions between the autocomplete and
+   * filterfield handlers.
+   */
+  private _inputFieldKeyboardLocked = false;
 
   /**
    * Whether a loading spinner should be shown or not.
@@ -375,6 +385,11 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
     this._stateChanges
       .pipe(switchMap(() => this._zone.onMicrotaskEmpty.pipe(take(1))))
       .subscribe(() => {
+        // Unlocking the input field again. It is now ready to receive
+        // keyboard events again. The locking mechanism is necessary to prevent
+        // races between the filter field keyboardEvent handler and the autocomplete
+        // keyboardEvent handler.
+        this._inputFieldKeyboardLocked = false;
         if (this._isFocused) {
           if (
             isDtAutocompleteDef(this._currentDef) ||
@@ -421,6 +436,10 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
     // tslint:disable-next-line:no-any
     this._autocomplete.optionSelected.subscribe(
       (event: DtAutocompleteSelectedEvent<any>) => {
+        // Locking keyboardEvents until they are being unlocked again in the next change
+        // detection cycle. This is to prevent races between autocomplete and the
+        // filterfield keybaord event listeners.
+        this._inputFieldKeyboardLocked = true;
         this._handleAutocompleteSelected(event);
       },
     );
@@ -429,6 +448,11 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
     fromEvent(this._inputEl.nativeElement, 'input')
       .pipe(
         takeUntil(this._destroy),
+        map(() => this._inputEl.nativeElement.value),
+        distinctUntilChanged(),
+        tap(value => {
+          this._inputValue = value;
+        }),
         debounceTime(DT_FILTER_FIELD_TYPING_DEBOUNCE),
       )
       .subscribe(() => {
@@ -507,15 +531,12 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
   /** @internal Keep track of the values in the input fields. Write the current value to the _inputValue property */
   _handleInputChange(): void {
     const value = this._inputEl.nativeElement.value;
-    if (value !== this._inputValue) {
-      this._inputValue = value;
-      this._writeControlValue(value);
-      this._updateAutocompleteOptionsOrGroups();
-      this.inputChange.emit(value);
+    this._writeControlValue(value);
+    this._updateAutocompleteOptionsOrGroups();
+    this.inputChange.emit(value);
 
-      this._validateInput();
-      this._changeDetectorRef.markForCheck();
-    }
+    this._validateInput();
+    this._changeDetectorRef.markForCheck();
   }
 
   /** @internal */
@@ -535,24 +556,23 @@ export class DtFilterField<T> implements AfterViewInit, OnDestroy, OnChanges {
       if (this._editModeStashedValue) {
         this._cancelEditMode();
       }
+    } else {
+      if (this._inputFieldKeyboardLocked) {
+        return;
+      }
+      const value = this._inputEl.nativeElement.value;
+      this._writeControlValue(value);
+      this._validateInput();
+      if (
+        keyCode === ENTER &&
+        isDtFreeTextDef(this._currentDef) &&
+        this._control &&
+        this._control.valid
+      ) {
+        this._handleFreeTextSubmitted();
+      }
+      this._changeDetectorRef.markForCheck();
     }
-  }
-
-  /** @internal */
-  _handleInputKeyUp(event: KeyboardEvent): void {
-    const keyCode = readKeyCode(event);
-    const value = this._inputEl.nativeElement.value;
-    this._writeControlValue(value);
-    this._validateInput();
-    if (
-      keyCode === ENTER &&
-      isDtFreeTextDef(this._currentDef) &&
-      this._control &&
-      this._control.valid
-    ) {
-      this._handleFreeTextSubmitted();
-    }
-    this._changeDetectorRef.markForCheck();
   }
 
   /**

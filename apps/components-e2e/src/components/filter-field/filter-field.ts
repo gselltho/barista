@@ -51,6 +51,19 @@ const TEST_DATA = {
         },
       ],
     },
+    {
+      name: 'Autocomplete with free text options',
+      autocomplete: [
+        'Autocomplete option 1',
+        'Autocomplete option 2',
+        'Autocomplete option 3',
+        {
+          name: 'Autocomplete free text',
+          suggestions: ['Suggestion 1', 'Suggestion 2', 'Suggestion 3'],
+          validators: [],
+        },
+      ],
+    },
   ],
 };
 
