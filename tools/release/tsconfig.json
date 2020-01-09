@@ -1,8 +1,8 @@
 {
+  "extends": "../tsconfig.tools.json",
   "compilerOptions": {
     "types": ["node", "jest"],
     "outDir": "../../dist/tools/release",
-    "rootDir": "src",
     "target": "esnext",
     "module": "commonjs"
   },

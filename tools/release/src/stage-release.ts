@@ -17,7 +17,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { bold, cyan, green, italic, red, yellow } from 'chalk';
-import { prompt } from 'inquirer';
 import * as OctokitApi from '@octokit/rest';
 
 import { promptAndGenerateChangelog, CHANGELOG_FILE_NAME } from './changelog';
@@ -31,6 +30,7 @@ import {
 import { promptForNewVersion } from './new-version-prompt';
 import { Version, parseVersionName } from './parse-version';
 import { getAllowedPublishBranch } from './publish-branch';
+import { promptConfirm } from './prompts';
 
 class StageReleaseTask {
   /** Path to the project package JSON. */
@@ -146,9 +146,7 @@ class StageReleaseTask {
     console.log();
 
     if (
-      !(await this._promptConfirm(
-        'Do you want to proceed and commit the changes?',
-      ))
+      !(await promptConfirm('Do you want to proceed and commit the changes?'))
     ) {
       console.log();
       console.log(yellow('Aborting release staging...'));
@@ -324,7 +322,7 @@ class StageReleaseTask {
       console.error(red(`      Please have a look at: ${githubCommitsUrl}`));
 
       if (
-        await this._promptConfirm(
+        await promptConfirm(
           'Do you want to ignore the Github status and proceed?',
         )
       ) {
@@ -347,7 +345,7 @@ class StageReleaseTask {
       console.error(red(`      Please have a look at: ${githubCommitsUrl}`));
 
       if (
-        await this._promptConfirm(
+        await promptConfirm(
           'Do you want to ignore the Github status and proceed?',
         )
       ) {
@@ -365,15 +363,6 @@ class StageReleaseTask {
     console.info(
       green(`  ✓   Upstream commit is passing all github status checks.`),
     );
-  }
-
-  /** Prompts the user with a confirmation question and a specified message. */
-  private async _promptConfirm(message: string): Promise<boolean> {
-    return (await prompt<{ result: boolean }>({
-      type: 'confirm',
-      name: 'result',
-      message: message,
-    })).result;
   }
 }
 

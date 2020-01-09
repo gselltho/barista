@@ -19,37 +19,11 @@ import {
   BuilderOutput,
   createBuilder,
 } from '@angular-devkit/architect';
-import { ExecOptions, exec } from 'child_process';
 import { join } from 'path';
 import { statSync } from 'fs';
 import { TypescriptBuilderOptions } from './schema';
 import { JsonObject } from '@angular-devkit/core';
-
-/**
- * Spawns a shell then executes the command within that shell
- */
-export async function executeCommand(
-  command: string,
-  cwd?: string,
-): Promise<string> {
-  const maxBuffer = 1024 * 1024 * 10;
-
-  const options: ExecOptions = {
-    cwd: cwd || process.cwd(),
-    maxBuffer,
-  };
-
-  return new Promise((resolve, reject) => {
-    exec(command, options, (err, stdout, stderr) => {
-      if (err !== null) {
-        reject(stdout);
-      } else {
-        resolve(stdout);
-      }
-    });
-  });
-}
-
+import { executeCommand } from '../../util/execute-command';
 /** Compiles typescript files using tsc */
 async function run(
   options: TypescriptBuilderOptions,
