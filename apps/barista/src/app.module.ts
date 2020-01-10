@@ -62,6 +62,7 @@ import { DtBreadcrumbsModule } from '@dynatrace/barista-components/breadcrumbs';
 import { DtThemingModule } from '@dynatrace/barista-components/theming';
 import { DtExamplesModule } from '@dynatrace/barista-components/examples';
 import { DtToastModule } from '@dynatrace/barista-components/toast';
+import { RouterModule } from '@angular/router';
 
 @NgModule({
   imports: [
@@ -82,6 +83,7 @@ import { DtToastModule } from '@dynatrace/barista-components/toast';
     DtThemingModule,
     DtExamplesModule,
     DtToastModule,
+    RouterModule.forRoot([], { errorHandler: () => {} }),
   ],
   exports: [],
   declarations: [

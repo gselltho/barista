@@ -89,6 +89,8 @@ The context actions menu is a variant of the context dialog placed on the top
 right within a [card](/components/card), containing
 [secondary buttons](/components/button).
 
+<ba-live-example name="DtExampleContextDialogActions" background="true"></ba-live-example>
+
 ### Context dialog with custom trigger
 
 To add a custom trigger you can add the `[dtContextDialogTrigger]` directive to

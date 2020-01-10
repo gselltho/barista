@@ -24,6 +24,11 @@ $code-font-size: 14px;
   border-right: 1px solid $gray-300;
   border-top-left-radius: 3px;
   border-top-right-radius: 3px;
+  overflow: auto;
+}
+
+.ba-live-example-demo-background {
+  background-color: #f8f8f8;
 }
 
 :host.ba-live-example-dark .ba-live-example-demo {

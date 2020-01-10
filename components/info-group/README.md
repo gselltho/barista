@@ -39,7 +39,7 @@ sections (directives):
 An info group can be used in a [card](/components/card) and on the top of a page
 to show properties.
 
-<ba-live-example name="DtExampleInfoGroupInCard" fullwidth="true"></ba-live-example>
+<ba-live-example name="DtExampleInfoGroupInCard" fullwidth="true" background="true"></ba-live-example>
 
 ### Info groups in tables
 
