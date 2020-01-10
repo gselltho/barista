@@ -36,11 +36,9 @@
     "barista": "npm run examples-tools && npm run barista-tools && ng serve barista",
     "demos": "npm run examples-tools && ng serve demos",
     "examples-tools": "ng build examples-tools && node dist/tools/examples/main.js",
-    "stage-release": "ng build release-tools && node dist/tools/release/stage-release.js",
-    "release-check": "ng build release-tools && node dist/tools/release/release-check.js",
-    "create-tag": "ng build release-tools && node dist/tools/release/create-tag.js",
-    "breaking-changes": "gulp breaking-changes",
-    "publish-release": "ts-node -P tools/release/tsconfig.json tools/release/src/publish-release.ts"
+    "stage-release": "ng run tools-release:build-stage-release && node dist/tools/stage-release/main.js",
+    "publish-release": "ng run tools-release:build-publish-release && node dist/tools/publish-release/main.js",
+    "breaking-changes": "gulp breaking-changes"
   },
   "author": "Dynatrace",
   "license": "SEE LICENSE IN LICENSE",

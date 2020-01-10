@@ -723,11 +723,33 @@
       "projectType": "library",
       "architect": {
         "build": {
+          "builder": "@nrwl/workspace:run-commands",
+          "options": {
+            "parallel": true,
+            "commands": [
+              {
+                "command": "npx ng run tools-release:build-publish-release"
+              },
+              {
+                "command": "npx ng run tools-release:build-publish-release"
+              }
+            ]
+          }
+        },
+        "build-publish-release": {
           "builder": "@nrwl/node:build",
           "options": {
             "main": "tools/release/src/publish-release.ts",
             "tsConfig": "tools/release/tsconfig.json",
-            "outputPath": "dist/tools/release"
+            "outputPath": "dist/tools/publish-release"
+          }
+        },
+        "build-stage-release": {
+          "builder": "@nrwl/node:build",
+          "options": {
+            "main": "tools/release/src/stage-release.ts",
+            "tsConfig": "tools/release/tsconfig.json",
+            "outputPath": "dist/tools/stage-release"
           }
         },
         "publish-release": {
