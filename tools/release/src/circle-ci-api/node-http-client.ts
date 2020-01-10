@@ -1,5 +1,21 @@
 /**
  * @license
+ * Copyright 2020 Dynatrace LLC
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @license
  * Copyright 2019 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +38,6 @@ import axios, {
 } from 'axios';
 import { Observable, Subscriber } from 'rxjs';
 
-const METHOD_NOT_SUPPORTED_ERROR = 'This method is not supported!';
-
 /**
  * Wrapped axios requests in streams to easily test them
  */
@@ -36,33 +50,8 @@ export class NodeHTTPClient {
   }
 
   /** Wrap the request in an observable */
-  private _request<T>(
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
-    url: string,
-    queryParams?: object,
-    body?: object,
-  ): Observable<T> {
-    let request: AxiosPromise<T>;
-
-    switch (method) {
-      case 'get':
-        request = this._httpClient.get<T>(url, { params: queryParams });
-        break;
-      case 'post':
-        request = this._httpClient.post<T>(url, body, { params: queryParams });
-        break;
-      case 'put':
-        request = this._httpClient.put<T>(url, body, { params: queryParams });
-        break;
-      case 'patch':
-        request = this._httpClient.patch<T>(url, body, { params: queryParams });
-        break;
-      case 'delete':
-        request = this._httpClient.delete(url, { params: queryParams });
-        break;
-      default:
-        throw new Error(METHOD_NOT_SUPPORTED_ERROR);
-    }
+  request<T>(config: AxiosRequestConfig): Observable<T> {
+    let request: AxiosPromise<T> = this._httpClient.request(config);
 
     return new Observable<T>((subscriber: Subscriber<T>) => {
       request
@@ -77,23 +66,42 @@ export class NodeHTTPClient {
     });
   }
 
-  get<T>(url: string, queryParams?: object) {
-    return this._request<T>('get', url, queryParams);
+  get<T>(url: string, queryParams?: object): Observable<T> {
+    return this.request<T>({
+      method: 'get',
+      url,
+      params: queryParams,
+    });
   }
 
-  post<T>(url: string, body: object, queryParams?: object) {
-    return this._request<T>('post', url, queryParams, body);
+  post<T>(url: string, body: object, queryParams?: object): Observable<T> {
+    return this.request<T>({
+      method: 'post',
+      url,
+      params: queryParams,
+      data: body,
+    });
   }
 
-  put<T>(url: string, body: object, queryParams?: object) {
-    return this._request<T>('put', url, queryParams, body);
+  put<T>(url: string, body: object, queryParams?: object): Observable<T> {
+    return this.request<T>({
+      method: 'put',
+      url,
+      params: queryParams,
+      data: body,
+    });
   }
 
-  patch<T>(url: string, body: object, queryParams?: object) {
-    return this._request<T>('patch', url, queryParams, body);
+  patch<T>(url: string, body: object, queryParams?: object): Observable<T> {
+    return this.request<T>({
+      method: 'patch',
+      url,
+      params: queryParams,
+      data: body,
+    });
   }
 
-  delete(url: string, queryParams?: object) {
-    return this._request('delete', url, queryParams);
+  delete(url: string, queryParams?: object): Observable<void> {
+    return this.request({ method: 'delete', url, params: queryParams });
   }
 }

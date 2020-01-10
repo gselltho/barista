@@ -154,7 +154,7 @@ test('should throw when no circle ci token is provide', async () => {
   expect.assertions(1);
 
   try {
-    await publishRelease();
+    await publishRelease('/');
   } catch (error) {
     expect(error.message).toBe(NO_TOKENS_PROVIDED_ERROR);
   }
@@ -165,7 +165,7 @@ test('should throw when no npm publish token is provide', async () => {
   expect.assertions(1);
 
   try {
-    await publishRelease();
+    await publishRelease('/');
   } catch (error) {
     expect(error.message).toBe(NO_TOKENS_PROVIDED_ERROR);
   }
@@ -179,13 +179,25 @@ describe.only('publish release', () => {
 
     jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
     jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
+    jest.spyOn(git, 'verifyNoUncommittedChanges').mockImplementation();
+    jest.spyOn(git, 'verifyLocalCommitsMatchUpstream').mockImplementation();
+    jest
+      .spyOn(GitClient.prototype, 'getLocalCommitSha')
+      .mockReturnValue('dff6e4181d8589592ab5e568872cccb2ddfb5ef3');
 
-    vol.fromJSON({
-      '/package.json': JSON.stringify({ version: '5.0.0' }),
-    });
+    // [ { path: 'barista-components',
+    //     node_index: 0,
+    //     url:
+    //      'https://6560-218540919-gh.circle-artifacts.com/0/barista-components' } ]
   });
 
   test('', async () => {
-    await publishRelease();
+    vol.fromJSON({
+      '/package.json': JSON.stringify({ version: '5.0.0' }),
+    });
+
+    await publishRelease('/');
+
+    console.log(vol.toJSON());
   });
 });

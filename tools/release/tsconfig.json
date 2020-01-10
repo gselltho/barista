@@ -2,9 +2,11 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": ["node", "jest"],
-    "outDir": "../../dist/tools/release",
+    "outDir": "../../dist/out-tsc",
     "target": "esnext",
-    "module": "commonjs"
+    "module": "commonjs",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "exclude": ["**/*.spec.ts"],
   "include": ["**/*.ts"]

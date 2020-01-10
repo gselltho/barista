@@ -717,22 +717,23 @@
         }
       }
     },
-    "release-tools": {
+    "tools-release": {
       "root": "tools/release",
       "sourceRoot": "tools/release/src",
       "projectType": "library",
       "architect": {
         "build": {
-          "builder": "@dynatrace/barista-builders:typescript",
+          "builder": "@nrwl/node:build",
           "options": {
-            "tsConfig": "tools/release/tsconfig.json"
-          },
-          "configurations": {
-            "production": {
-              "optimization": false,
-              "extractLicenses": false,
-              "inspect": false
-            }
+            "main": "tools/release/src/publish-release.ts",
+            "tsConfig": "tools/release/tsconfig.json",
+            "outputPath": "dist/tools/release"
+          }
+        },
+        "publish-release": {
+          "builder": "@nrwl/node:execute",
+          "options": {
+            "buildTarget": "tools-release:build"
           }
         },
         "lint": {

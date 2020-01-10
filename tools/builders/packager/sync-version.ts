@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { PackageJson } from '../utils/json-utils';
+import { PackageJson } from '../util/json-utils';
 
 /**
  * Writes the version of the root package.json to the one of the build artifact
@@ -45,9 +45,9 @@ export function syncNgVersion(
   placeholder: string,
 ): PackageJson {
   const updatedJson = { ...releaseJson };
-  for (const [key, value] of Object.entries(releaseJson.peerDependencies)) {
+  for (const [key, value] of Object.entries(releaseJson.peerDependencies!)) {
     if (value.includes(placeholder)) {
-      updatedJson.peerDependencies[key] = rootPackageJson.dependencies[key];
+      updatedJson.peerDependencies![key] = packageJson.dependencies![key];
     }
   }
   return updatedJson;
