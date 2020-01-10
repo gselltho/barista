@@ -15,36 +15,37 @@
  */
 
 import {
+  executeCommand,
   PackageJson,
   tryJsonParse,
-  executeCommand,
 } from '@dynatrace/barista-components/tools/shared';
 import * as OctokitApi from '@octokit/rest';
 import { bold, green, red } from 'chalk';
 import { config as dotenvConfig } from 'dotenv';
+import { promises as fs } from 'fs';
 import { join } from 'path';
+import { map, switchMap } from 'rxjs/operators';
 import { CHANGELOG_FILE_NAME } from './changelog';
 import { CircleCiApi } from './circle-ci-api/circle-ci-api';
 import { extractReleaseNotes } from './extract-release-notes';
-import { downloadFile, extractTarFile } from './file-operations';
+import {
+  verifyLocalCommitsMatchUpstream,
+  verifyNoUncommittedChanges,
+  verifyPassingGithubStatus,
+} from './git';
 import { GitClient } from './git/git-client';
 import { npmPublish } from './npm/npm-client';
-import { parseVersionName, Version, determineVersion } from './parse-version';
+import { determineVersion, parseVersionName, Version } from './parse-version';
 import { promptConfirmReleasePublish } from './prompts';
 import { shouldRelease } from './release-check';
-import { promises as fs, existsSync } from 'fs';
 import {
   BUNDLE_VERSION_ERROR,
   NO_TOKENS_PROVIDED_ERROR,
   NO_VALID_RELEASE_BRANCH_ERROR,
 } from './release-errors';
 import { createReleaseTag, pushReleaseTag } from './tagging';
-import {
-  verifyPassingGithubStatus,
-  verifyLocalCommitsMatchUpstream,
-  verifyNoUncommittedChanges,
-} from './git';
-import { tap, switchMap, map } from 'rxjs/operators';
+import { createFolder } from './utils';
+import { unpackTarFile } from './utils/unpack-tar';
 
 // load the environment variables from the .env file in your workspace
 dotenvConfig();
@@ -60,7 +61,7 @@ const BUNDLE_NAME = 'barista-components.tar.gz';
  */
 export async function publishRelease(workspaceRoot: string): Promise<void> {
   /** The temporary folder where the dist should be unpacked */
-  const TAR_DESTINATION = join(workspaceRoot, 'tmp');
+  const TMP_FOLDER = join(workspaceRoot, 'tmp');
   /** Private token for the circle ci */
   const CIRCLE_CI_TOKEN = process.env.CIRCLE_CI_TOKEN;
   /** Token to publish in the registry */
@@ -88,20 +89,28 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // determine version for the check whether we should release from this branch
   const version = await determineVersion(workspaceRoot);
 
-  // // verify if we should release
-  // if (!shouldRelease(gitClient, version)) {
-  //   throw new Error(NO_VALID_RELEASE_BRANCH_ERROR);
-  // }
-  // const currentBranch = gitClient.getCurrentBranch();
+  // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  // #
+  // #  V E R I F Y
+  // #  ---------------
+  // #  Verify if you are on the correct branch and there are no un committed changes
+  // #
+  // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-  // // check that the build was successful
-  // await verifyPassingGithubStatus(gitClient, githubApi, currentBranch);
+  // verify if we should release
+  if (!shouldRelease(gitClient, version)) {
+    throw new Error(NO_VALID_RELEASE_BRANCH_ERROR);
+  }
+  const currentBranch = gitClient.getCurrentBranch();
 
-  // // verify un-committed changes
-  // verifyNoUncommittedChanges(gitClient);
+  // check that the build was successful
+  await verifyPassingGithubStatus(gitClient, githubApi, currentBranch);
 
-  // // verify local commits match upstream
-  // verifyLocalCommitsMatchUpstream(gitClient, currentBranch);
+  // verify un-committed changes
+  verifyNoUncommittedChanges(gitClient);
+
+  // verify local commits match upstream
+  verifyLocalCommitsMatchUpstream(gitClient, currentBranch);
 
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
   // #
@@ -111,64 +120,53 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // #
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-  const relaseCommit = 'd8614c3e19ec19992a21de367aa27aaee4427448'; // = gitClient.getLocalCommitSha('HEAD')
-  // the location where the artifact should be downloaded to
-  const packedArtifactFile = join(TAR_DESTINATION, 'components.tar.gz');
+  const releaseCommit = 'd8614c3e19ec19992a21de367aa27aaee4427448'; // = gitClient.getLocalCommitSha('HEAD')
+  // the location where the builded dist is located
+  const artifactsFolder = join(TMP_FOLDER, 'components');
+  const artifactTar = `${artifactsFolder}.tar.gz`;
 
-  // creating the destination folder for the artifact
-  await executeCommand(`rm -rf ${TAR_DESTINATION}`);
+  // create tmp folder to download the artifact and unpack it.
+  await createFolder(TMP_FOLDER);
 
-  await fs.mkdir(TAR_DESTINATION, { recursive: true });
-
-  // request build id for commit on remote
-  const circleArtifact = await circleCiApi
-    .getArtifactUrlForBranch(relaseCommit)
+  // download the artifact
+  await circleCiApi
+    .getArtifactUrlForBranch(releaseCommit)
     .pipe(
       map(artifacts => artifacts[0]),
       switchMap(artifact =>
-        circleCiApi.downloadArtifact(artifact, packedArtifactFile),
+        circleCiApi.downloadArtifact(artifact, artifactTar),
       ),
     )
     .toPromise();
 
-  console.log(
-    `tar -xzf ${packedArtifactFile} -C ${join(TAR_DESTINATION, 'components')}`,
-  );
   // unpack the downloaded artifact
-  // await executeCommand(`tar -xzf ${packedArtifactFile} -C ${join(TAR_DESTINATION, 'components')}`);
+  await unpackTarFile(artifactTar, TMP_FOLDER);
 
-  // return;
+  // check release bundle (verify version in package.json)
+  await verifyBundle(version, artifactsFolder);
 
-  // // download the tar file
-  // await downloadFile(TAR_DESTINATION, circleArtifact[0].url);
-  // const extractedPath = join(TAR_DESTINATION, 'extracted');
-  // // extract tar file
-  // await extractTarFile(extractedPath, BUNDLE_NAME);
+  // extract release notes
+  const releaseNotes = extractReleaseNotes(
+    CHANGELOG_FILE_NAME,
+    version.format(),
+  );
 
-  // // check release bundle (verify version in package.json)
-  // await verifyBundle(version, extractedPath);
+  const tagName = version.format();
+  // create release tag
+  createReleaseTag(tagName, releaseNotes, gitClient);
 
-  // // extract release notes
-  // const releaseNotes = extractReleaseNotes(
-  //   CHANGELOG_FILE_NAME,
-  //   version.format(),
-  // );
-  // const tagName = version.format();
-  // // create release tag
-  // createReleaseTag(tagName, releaseNotes, gitClient);
+  // push release tag to github
+  pushReleaseTag(tagName, gitClient);
 
-  // // push release tag to github
-  // pushReleaseTag(tagName, gitClient);
+  // safety net - confirm publish again
+  await promptConfirmReleasePublish();
 
-  // // safety net - confirm publish again
-  // await promptConfirmReleasePublish();
+  // confirm npm publish
+  publishPackageToNpm('DUMMY_PATH');
 
-  // // confirm npm publish
-  // publishPackageToNpm('DUMMY_PATH');
+  console.info(green(bold(`  ✓   Published successfully`)));
 
-  // console.log(green(bold(`  ✓   Published successfully`)));
-
-  // // publish TADA!🥳
+  // publish TADA!🥳
 }
 
 /**
