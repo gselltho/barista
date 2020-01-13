@@ -162,7 +162,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   await promptConfirmReleasePublish();
 
   // confirm npm publish
-  publishPackageToNpm('DUMMY_PATH');
+  publishPackageToNpm(artifactTar);
 
   console.info(green(bold(`  ✓   Published successfully`)));
 

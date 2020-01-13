@@ -47,7 +47,7 @@ export function syncNgVersion(
   const updatedJson = { ...releaseJson };
   for (const [key, value] of Object.entries(releaseJson.peerDependencies!)) {
     if (value.includes(placeholder)) {
-      updatedJson.peerDependencies![key] = packageJson.dependencies![key];
+      updatedJson.peerDependencies![key] = rootPackageJson.dependencies![key];
     }
   }
   return updatedJson;
