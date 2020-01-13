@@ -54,7 +54,7 @@
 
 <div class="listing">
   <dt-tag-list>
-    <dt-tag *ngFor="let tag of tags">{{ tag }}</dt-tag>
+    <dt-tag [removable]="true" *ngFor="let tag of tags">{{ tag }}</dt-tag>
     <dt-tag-add
       placeholder="insert tag here"
       (tagAdded)="addTag($event)"
