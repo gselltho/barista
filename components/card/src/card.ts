@@ -20,7 +20,6 @@ import {
   ContentChild,
   Directive,
   ViewEncapsulation,
-  Optional,
 } from '@angular/core';
 
 /** Title of a card, needed as it's used as a selector in the API. */
