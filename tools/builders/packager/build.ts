@@ -24,11 +24,7 @@ import { writeFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { NgPackagrBuilderOptions } from '@angular-devkit/build-ng-packagr';
 import { green } from 'chalk';
-import {
-  NgPackagerJson,
-  PackageJson,
-  tryJsonParse,
-} from '../util/json-utils';
+import { NgPackagerJson, PackageJson, tryJsonParse } from '../util/json-utils';
 import { copyAssets, copyStyles } from './copy-assets';
 import { PackagerOptions } from './schema';
 import { syncNgVersion, syncBaristaComponentsVersion } from './sync-version';
