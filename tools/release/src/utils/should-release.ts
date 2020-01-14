@@ -30,9 +30,9 @@
  * limitations under the License.
  */
 
-import { Version } from './parse-version';
-import { getAllowedPublishBranch } from './publish-branch';
-import { GitClient } from './git/git-client';
+import { Version } from '../parse-version';
+import { getAllowedPublishBranch } from '../publish-branch';
+import { GitClient } from '../git';
 
 /** Creates a release commit message for the specified version. */
 export function getReleaseCommit(version: string): string {

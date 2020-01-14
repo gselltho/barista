@@ -13,13 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { PassThrough } from 'stream';
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
+/** merges two nodejs streams together */
+export function mergeNodeStreams(...streams: any[]): any {
+  let pass = new PassThrough();
+  let waiting = streams.length;
 
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
+  for (let stream of streams) {
+    pass = stream.pipe(
+      pass,
+      { end: false },
+    );
+    stream.once('end', () => --waiting === 0 && pass.end());
+  }
+
+  return pass;
 }

@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
+import { red } from 'chalk';
+import { publishRelease } from './publish-release';
 
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
-}
+/** The root of the barista git repo where the git commands should be executed */
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
+
+// /** Entry-point for the create release script. */
+publishRelease(WORKSPACE_ROOT)
+  .then()
+  .catch(error => {
+    console.log(red(error));
+    process.exit(1);
+  });

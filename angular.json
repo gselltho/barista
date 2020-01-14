@@ -739,7 +739,7 @@
         "build-publish-release": {
           "builder": "@nrwl/node:build",
           "options": {
-            "main": "tools/release/src/publish-release.ts",
+            "main": "tools/release/src/publish-release-cli.ts",
             "tsConfig": "tools/release/tsconfig.json",
             "outputPath": "dist/tools/publish-release"
           }
@@ -747,15 +747,22 @@
         "build-stage-release": {
           "builder": "@nrwl/node:build",
           "options": {
-            "main": "tools/release/src/stage-release.ts",
+            "main": "tools/release/src/stage-release-cli.ts",
             "tsConfig": "tools/release/tsconfig.json",
-            "outputPath": "dist/tools/stage-release"
+            "outputPath": "dist/tools/stage-release",
+            "assets": [
+              {
+                "glob": "*",
+                "input": "tools/release/src/assets",
+                "output": "assets"
+              }
+            ]
           }
         },
         "publish-release": {
           "builder": "@nrwl/node:execute",
           "options": {
-            "buildTarget": "tools-release:build"
+            "buildTarget": "tools-release:build-stage-release"
           }
         },
         "lint": {

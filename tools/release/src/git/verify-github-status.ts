@@ -26,7 +26,7 @@ import {
   GET_GITHUB_STATUS_PENDING_ERROR,
   GET_GITHUB_STATUS_FAILED_ERROR,
   UNCOMMITED_CHANGES_ERROR,
-} from '../release-errors';
+} from '../utils';
 
 /**
  * Verifies that the github status for the latest local commit passed

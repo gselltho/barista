@@ -14,12 +14,22 @@
  * limitations under the License.
  */
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
+import * as conventionalChangelog from 'conventional-changelog';
+import { Readable } from 'stream';
 
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
+/** Generates the new changelog based on the git history */
+export function getNewChangelog(
+  headerPartial: string,
+  releaseName: string,
+): Readable {
+  return conventionalChangelog(
+    { preset: 'angular' },
+    { title: releaseName },
+    null, // raw-commits options
+    {}, // commit parser options
+    {
+      // writer options
+      headerPartial,
+    },
+  );
 }

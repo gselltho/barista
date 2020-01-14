@@ -20,7 +20,7 @@ import {
   GET_TAG_ALREADY_EXISTS_ON_REMOTE,
   GET_TAG_ALREADY_EXISTS,
   GET_LOCAL_TAG_EXISTS_BUT_NO_BUMP_ERROR,
-} from './release-errors';
+} from './utils';
 import { GitClient } from './git/git-client';
 import { ReleaseNotes } from './extract-release-notes';
 

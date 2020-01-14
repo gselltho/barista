@@ -15,7 +15,7 @@
  */
 
 import { join } from 'path';
-import { GET_INVALID_PACKAGE_JSON_VERSION_ERROR } from './release-errors';
+import { GET_INVALID_PACKAGE_JSON_VERSION_ERROR } from './utils/release-errors';
 import {
   PackageJson,
   tryJsonParse,

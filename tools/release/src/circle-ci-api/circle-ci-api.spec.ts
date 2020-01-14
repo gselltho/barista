@@ -53,7 +53,7 @@ test('Should return artifacts and call appropriate urls', () => {
   const commitSha = '1a490a8ecdd51109da733318aa61fc8da97e2b01';
   const pipelineResponse = [pipeline(commitSha, 'workflow-id')];
   const workflowResponse = [workflow('job-id')];
-  const jobResponse = [job('build', 'job-number')];
+  const jobResponse = [job('store-build-artifacts', 'job-number')];
   const artifactsResponse = [{ name: 'my-artifact' }];
 
   const httpGetSpy = jest

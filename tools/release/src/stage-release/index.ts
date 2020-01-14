@@ -14,12 +14,4 @@
  * limitations under the License.
  */
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
-
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
-}
+export { stageRelease } from './stage-release';

@@ -14,46 +14,35 @@
  * limitations under the License.
  */
 
-import {
-  executeCommand,
-  PackageJson,
-  tryJsonParse,
-} from '@dynatrace/barista-components/tools/shared';
 import * as OctokitApi from '@octokit/rest';
-import { bold, green, red } from 'chalk';
+import { bold, green } from 'chalk';
 import { config as dotenvConfig } from 'dotenv';
-import { promises as fs } from 'fs';
 import { join } from 'path';
 import { map, switchMap } from 'rxjs/operators';
-import { CHANGELOG_FILE_NAME } from './changelog';
-import { CircleCiApi } from './circle-ci-api/circle-ci-api';
-import { extractReleaseNotes } from './extract-release-notes';
+import { CHANGELOG_FILE_NAME } from '../changelog';
+import { CircleCiApi } from '../circle-ci-api/circle-ci-api';
+import { extractReleaseNotes } from '../extract-release-notes';
 import {
+  GitClient,
   verifyLocalCommitsMatchUpstream,
   verifyNoUncommittedChanges,
   verifyPassingGithubStatus,
-} from './git';
-import { GitClient } from './git/git-client';
-import { npmPublish } from './npm/npm-client';
-import { determineVersion, parseVersionName, Version } from './parse-version';
-import { promptConfirmReleasePublish } from './prompts';
-import { shouldRelease } from './release-check';
+} from '../git';
+import { determineVersion } from '../parse-version';
+import { promptConfirmReleasePublish } from '../prompts';
+import { createReleaseTag, pushReleaseTag } from '../tagging';
 import {
-  BUNDLE_VERSION_ERROR,
+  createFolder,
   NO_TOKENS_PROVIDED_ERROR,
   NO_VALID_RELEASE_BRANCH_ERROR,
-} from './release-errors';
-import { createReleaseTag, pushReleaseTag } from './tagging';
-import { createFolder } from './utils';
-import { unpackTarFile } from './utils/unpack-tar';
+  shouldRelease,
+  unpackTarFile,
+  verifyBundle,
+} from '../utils';
+import { publishPackageToNpm } from './publish-package-to-npm';
 
 // load the environment variables from the .env file in your workspace
 dotenvConfig();
-
-/** The root of the barista git repo where the git commands should be executed */
-const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
-
-const BUNDLE_NAME = 'barista-components.tar.gz';
 
 /**
  * The function to publish a release -
@@ -120,7 +109,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // #
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-  const releaseCommit = 'd8614c3e19ec19992a21de367aa27aaee4427448'; // = gitClient.getLocalCommitSha('HEAD')
+  const releaseCommit = '7c455a1c50a0d67c8e77d5c9633ae6337d1e4347'; // = gitClient.getLocalCommitSha('HEAD')
   // the location where the builded dist is located
   const artifactsFolder = join(TMP_FOLDER, 'components');
   const artifactTar = `${artifactsFolder}.tar.gz`;
@@ -168,49 +157,3 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
 
   // publish TADA!🥳
 }
-
-/**
- * Checks whether the version in the package.json in the
- * given path matches the version given.
- */
-async function verifyBundle(
-  version: Version,
-  bundlePath: string,
-): Promise<void> {
-  const bundlePackageJson = await tryJsonParse<PackageJson>(
-    join(bundlePath, 'package.json'),
-  );
-  const parsedBundleVersion = parseVersionName(bundlePackageJson.version || '');
-  if (!parsedBundleVersion || !parsedBundleVersion.equals(version)) {
-    throw new Error(BUNDLE_VERSION_ERROR);
-  }
-}
-
-/**
- * Publishes the specified package.
- * @throws Will throw if an error occurs during publishing
- */
-function publishPackageToNpm(bundlePath: string): void {
-  console.info(green('  📦   Publishing barista-components..'));
-
-  const errorOutput = npmPublish(bundlePath);
-
-  if (errorOutput) {
-    throw new Error(
-      `  ✘   An error occurred while publishing barista-components.`,
-    );
-  }
-
-  console.info(green('  ✓   Successfully published'));
-}
-
-// /** Entry-point for the create release script. */
-// if (require.main === module) {
-publishRelease(WORKSPACE_ROOT)
-  .then()
-  .catch(error => {
-    console.log(red(error));
-    // deliberately set to 0 so we don't have the error stacktrace in the console
-    process.exit(0);
-  });
-// }

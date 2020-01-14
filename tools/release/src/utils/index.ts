@@ -15,3 +15,7 @@
  */
 
 export * from './create-folder';
+export * from './release-errors';
+export * from './should-release';
+export * from './unpack-tar';
+export * from './verify-bundle';

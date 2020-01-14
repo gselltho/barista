@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { stageRelease } from './stage-release';
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
+/** The root of the barista git repo where the git commands should be executed */
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
 
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
-}
+stageRelease(WORKSPACE_ROOT, './assets/changelog-header-template.hbs')
+  .then()
+  .catch(error => {
+    console.log(error);
+    process.exit(1);
+  });

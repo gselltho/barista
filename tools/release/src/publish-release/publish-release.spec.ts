@@ -16,21 +16,21 @@
 
 import { vol } from 'memfs';
 
-import { GitClient } from './git/git-client';
+import { GitClient } from '../git/git-client';
 import * as OctokitApi from '@octokit/rest';
 import { publishRelease } from './publish-release';
-import * as git from './git';
+import * as git from '../git';
 import {
   GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
   GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
   CHANGELOG_PARSE_ERROR,
   NO_TOKENS_PROVIDED_ERROR,
   GET_GITHUB_STATUS_FAILED_ERROR,
-} from './release-errors';
-import { getFixture } from './testing/get-fixture';
-import * as releaseCheck from './release-check';
-import { Version, determineVersion } from './parse-version';
-import { extractReleaseNotes } from './extract-release-notes';
+} from '../utils';
+import { getFixture } from '../testing/get-fixture';
+import * as shouldRelease from '../utils/should-release';
+import { Version, determineVersion } from '../parse-version';
+import { extractReleaseNotes } from '../extract-release-notes';
 import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
 beforeEach(() => {
@@ -80,7 +80,7 @@ test('Should return false if branch is not a valid release branch', async () => 
     .mockImplementation(() => '1234');
 
   expect(
-    releaseCheck.shouldRelease(
+    shouldRelease.shouldRelease(
       new GitClient(process.cwd()),
       new Version(4, 15, 3),
     ),
@@ -171,33 +171,33 @@ test('should throw when no npm publish token is provide', async () => {
   }
 });
 
-// tslint:disable-next-line: dt-no-focused-tests
-describe.only('publish release', () => {
-  beforeEach(() => {
-    process.env.CIRCLE_CI_TOKEN = '87c589ff2b354f46f223c9915583d3ff476776e7';
-    process.env.NPM_PUBLISH_TOKEN = 'my-token';
+// // tslint:disable-next-line: dt-no-focused-tests
+// describe.only('publish release', () => {
+//   beforeEach(() => {
+//     process.env.CIRCLE_CI_TOKEN = '87c589ff2b354f46f223c9915583d3ff476776e7';
+//     process.env.NPM_PUBLISH_TOKEN = 'my-token';
 
-    jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
-    jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
-    jest.spyOn(git, 'verifyNoUncommittedChanges').mockImplementation();
-    jest.spyOn(git, 'verifyLocalCommitsMatchUpstream').mockImplementation();
-    jest
-      .spyOn(GitClient.prototype, 'getLocalCommitSha')
-      .mockReturnValue('dff6e4181d8589592ab5e568872cccb2ddfb5ef3');
+//     jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
+//     jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
+//     jest.spyOn(git, 'verifyNoUncommittedChanges').mockImplementation();
+//     jest.spyOn(git, 'verifyLocalCommitsMatchUpstream').mockImplementation();
+//     jest
+//       .spyOn(GitClient.prototype, 'getLocalCommitSha')
+//       .mockReturnValue('dff6e4181d8589592ab5e568872cccb2ddfb5ef3');
 
-    // [ { path: 'barista-components',
-    //     node_index: 0,
-    //     url:
-    //      'https://6560-218540919-gh.circle-artifacts.com/0/barista-components' } ]
-  });
+//     // [ { path: 'barista-components',
+//     //     node_index: 0,
+//     //     url:
+//     //      'https://6560-218540919-gh.circle-artifacts.com/0/barista-components' } ]
+//   });
 
-  test('', async () => {
-    vol.fromJSON({
-      '/package.json': JSON.stringify({ version: '5.0.0' }),
-    });
+//   test('', async () => {
+//     vol.fromJSON({
+//       '/package.json': JSON.stringify({ version: '5.0.0' }),
+//     });
 
-    await publishRelease('/');
+//     await publishRelease('/');
 
-    console.log(vol.toJSON());
-  });
-});
+//     console.log(vol.toJSON());
+//   });
+// });

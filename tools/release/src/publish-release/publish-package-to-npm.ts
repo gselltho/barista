@@ -13,13 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { green } from 'chalk';
+import { npmPublish } from '../npm/npm-client';
 
-import { join } from 'path';
-const { readFileSync } = jest.requireActual('fs');
+/**
+ * Publishes the specified package.
+ * @throws Will throw if an error occurs during publishing
+ */
+export function publishPackageToNpm(bundlePath: string): void {
+  console.info(green('  📦   Publishing barista-components..'));
 
-export function getFixture(file: string, baseDir?: string): string {
-  const filePath = baseDir
-    ? join(baseDir, file)
-    : join(__dirname, 'fixtures', file);
-  return readFileSync(filePath, { encoding: 'utf-8' });
+  const errorOutput = npmPublish(bundlePath);
+
+  if (errorOutput) {
+    throw new Error(
+      `  ✘   An error occurred while publishing barista-components.`,
+    );
+  }
+
+  console.info(green('  ✓   Successfully published'));
 }

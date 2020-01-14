@@ -15,7 +15,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { CHANGELOG_PARSE_ERROR } from './release-errors';
+import { CHANGELOG_PARSE_ERROR } from './utils';
 
 export interface ReleaseNotes {
   releaseTitle: string;

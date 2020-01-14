@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2019 Dynatrace LLC
+ * Copyright 2020 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,40 +15,42 @@
  */
 
 import {
-  tryJsonParse,
   PackageJson,
+  tryJsonParse,
 } from '@dynatrace/barista-components/tools/shared';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
-import { bold, cyan, green, italic, red, yellow } from 'chalk';
 import * as OctokitApi from '@octokit/rest';
-
-import { promptAndGenerateChangelog, CHANGELOG_FILE_NAME } from './changelog';
-import { getReleaseCommit } from './release-check';
+import { bold, cyan, green, italic, red, yellow } from 'chalk';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import {
+  CHANGELOG_FILE_NAME,
+  prependChangelogFromLatestTag,
+} from '../changelog';
 import {
   GitClient,
-  verifyNoUncommittedChanges,
-  verifyLocalCommitsMatchUpstream,
-  GITHUB_REPO_OWNER,
   GITHUB_REPO_NAME,
+  GITHUB_REPO_OWNER,
+  verifyLocalCommitsMatchUpstream,
+  verifyNoUncommittedChanges,
   verifyPassingGithubStatus,
-} from './git';
-import { promptForNewVersion } from './new-version-prompt';
-import { Version, determineVersion } from './parse-version';
-import { getAllowedPublishBranch } from './publish-branch';
-import { promptConfirm } from './prompts';
+} from '../git';
+import { promptForNewVersion } from '../new-version-prompt';
+import { determineVersion, Version } from '../parse-version';
+import { promptConfirm } from '../prompts';
+import { getAllowedPublishBranch } from '../publish-branch';
 import {
-  GET_FAILED_CREATE_STAGING_BRANCH_ERROR,
   ABORT_RELEASE,
+  getReleaseCommit,
   GET_BRANCH_SWITCH_ERROR,
-  GET_PUSH_RELEASE_BRANCH_ERROR,
+  GET_FAILED_CREATE_STAGING_BRANCH_ERROR,
   GET_PR_CREATION_ERROR,
-} from './release-errors';
+  GET_PUSH_RELEASE_BRANCH_ERROR,
+} from '../utils';
 
-/** The root of the barista git repo where the git commands should be executed */
-const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || process.cwd();
-
-async function stageRelease(): Promise<void> {
+export async function stageRelease(
+  workspaceRoot: string,
+  headerPartialPath: string,
+): Promise<void> {
   console.log();
   console.log(cyan('-----------------------------------------------------'));
   console.log(cyan('  Dynatrace Angular Components stage release script'));
@@ -56,22 +58,20 @@ async function stageRelease(): Promise<void> {
   console.log();
 
   // Instance of a wrapper that can execute Git commands.
-  const gitClient = new GitClient(WORKSPACE_ROOT);
+  const gitClient = new GitClient(workspaceRoot);
 
   // Octokit API instance that can be used to make Github API calls.
   const githubApi = new OctokitApi();
 
   // determine version
-  const currentVersion = await determineVersion(WORKSPACE_ROOT);
-  const packageJsonPath = join(WORKSPACE_ROOT, 'package.json');
+  const currentVersion = await determineVersion(workspaceRoot);
+  const packageJsonPath = join(workspaceRoot, 'package.json');
   const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
 
   const newVersion = await promptForNewVersion(currentVersion);
   const newVersionName = newVersion.format();
   const needsVersionBump = !newVersion.equals(currentVersion);
   const stagingBranch = `release-stage/${newVersionName}`;
-
-  console.log();
 
   verifyNoUncommittedChanges(gitClient);
 
@@ -87,7 +87,11 @@ async function stageRelease(): Promise<void> {
   }
 
   if (needsVersionBump) {
-    updatePackageJsonVersion(packageJson, packageJsonPath, newVersionName);
+    await updatePackageJsonVersion(
+      packageJson,
+      packageJsonPath,
+      newVersionName,
+    );
 
     console.log(
       green(
@@ -99,9 +103,9 @@ async function stageRelease(): Promise<void> {
     console.log();
   }
 
-  await promptAndGenerateChangelog(
-    join(WORKSPACE_ROOT, CHANGELOG_FILE_NAME),
-    '',
+  await prependChangelogFromLatestTag(
+    join(workspaceRoot, CHANGELOG_FILE_NAME),
+    headerPartialPath,
   );
 
   console.log();
@@ -198,25 +202,14 @@ function switchToPublishBranch(git: GitClient, newVersion: Version): string {
  * Updates the version of the project package.json and
  * writes the changes to disk.
  */
-function updatePackageJsonVersion(
+async function updatePackageJsonVersion(
   packageJson: PackageJson,
   packageJsonPath: string,
   newVersionName: string,
-): void {
+): Promise<void> {
   const newPackageJson = { ...packageJson, version: newVersionName };
-  writeFileSync(
+  await fs.writeFile(
     packageJsonPath,
     `${JSON.stringify(newPackageJson, null, 2)}\n`,
   );
-}
-
-/** Entry-point for the release staging script. */
-if (require.main === module) {
-  stageRelease()
-    .then()
-    .catch(error => {
-      console.log(error);
-      // deliberately set to 0 so we don't have the error stacktrace in the console
-      process.exit(0);
-    });
 }
