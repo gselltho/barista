@@ -25,7 +25,7 @@ export async function recommendBump(): Promise<{
   reason: string;
   releaseType: ReleaseType;
 }> {
-  return new Promise<any>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     conventionalRecommendedBump(
       { preset: 'angular' },
       (error, recommendation) => {

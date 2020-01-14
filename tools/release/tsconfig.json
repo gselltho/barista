@@ -4,9 +4,7 @@
     "types": ["node", "jest"],
     "outDir": "../../dist/out-tsc",
     "target": "esnext",
-    "module": "commonjs",
-    "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "module": "commonjs"
   },
   "exclude": ["**/*.spec.ts"],
   "include": ["**/*.ts"]
