@@ -14,9 +14,4 @@
  * limitations under the License.
  */
 
-export * from './create-folder';
-export * from './parse-package-version';
-export * from './release-errors';
-export * from './should-release';
-export * from './unpack-tar';
-export * from './verify-bundle';
+export * from './new-version-prompt';

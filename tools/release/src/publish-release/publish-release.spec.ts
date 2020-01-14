@@ -26,10 +26,11 @@ import {
   CHANGELOG_PARSE_ERROR,
   NO_TOKENS_PROVIDED_ERROR,
   GET_GITHUB_STATUS_FAILED_ERROR,
+  parsePackageVersion,
 } from '../utils';
 import { getFixture } from '../testing/get-fixture';
 import * as shouldRelease from '../utils/should-release';
-import { Version, determineVersion } from '../parse-version';
+import { parse } from 'semver';
 import { extractReleaseNotes } from '../extract-release-notes';
 import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 
@@ -47,7 +48,7 @@ afterEach(() => {
 test('Should throw an error when no package.json is found', async () => {
   expect.assertions(1);
   try {
-    await determineVersion(process.cwd());
+    await parsePackageVersion(process.cwd());
   } catch (err) {
     expect(err.message).toBe('Error while parsing json file at /package.json');
   }
@@ -62,7 +63,7 @@ test('Should throw an error if the package.json contains an invalid version', as
   expect.assertions(1);
 
   try {
-    await determineVersion(process.cwd());
+    await parsePackageVersion(process.cwd());
   } catch (err) {
     expect(err.message).toBe(
       GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson),
@@ -80,10 +81,7 @@ test('Should return false if branch is not a valid release branch', async () => 
     .mockImplementation(() => '1234');
 
   expect(
-    shouldRelease.shouldRelease(
-      new GitClient(process.cwd()),
-      new Version(4, 15, 3),
-    ),
+    shouldRelease.shouldRelease(new GitClient(process.cwd()), parse('4.15.3')!),
   ).toBe(false);
 });
 

@@ -13,27 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 import {
   PackageJson,
   tryJsonParse,
 } from '@dynatrace/barista-components/tools/shared';
 import { join } from 'path';
-import { SemVer, parse } from 'semver';
-import { BUNDLE_VERSION_ERROR } from './release-errors';
+import { parse, SemVer } from 'semver';
+import { GET_INVALID_PACKAGE_JSON_VERSION_ERROR } from './release-errors';
 
 /**
- * Checks whether the version in the package.json in the
- * given path matches the version given.
+ * Reads the package json in the given baseDir
+ * and tries to parse the version as a semantic version
+ * @throws Will throw if no package.json is found or the version cannot be parsed
  */
-export async function verifyBundle(
-  version: SemVer,
-  bundlePath: string,
-): Promise<void> {
-  const bundlePackageJson = await tryJsonParse<PackageJson>(
-    join(bundlePath, 'package.json'),
-  );
-  const parsedBundleVersion = parse(bundlePackageJson.version || '');
-  if (!parsedBundleVersion || parsedBundleVersion.compare(version) !== 0) {
-    throw new Error(BUNDLE_VERSION_ERROR);
+export async function parsePackageVersion(baseDir: string): Promise<SemVer> {
+  const packageJsonPath = join(baseDir, 'package.json');
+
+  let parsedVersion: SemVer | null;
+
+  const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
+
+  parsedVersion = parse(packageJson.version || '');
+
+  if (!parsedVersion) {
+    throw new Error(GET_INVALID_PACKAGE_JSON_VERSION_ERROR(packageJson));
   }
+  return parsedVersion;
 }

@@ -13,10 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import * as conventionalRecommendedBump from 'conventional-recommended-bump';
+import { ReleaseType } from 'semver';
 
-export * from './create-folder';
-export * from './parse-package-version';
-export * from './release-errors';
-export * from './should-release';
-export * from './unpack-tar';
-export * from './verify-bundle';
+/**
+ * Returns an object containing information for the
+ * recommended version bump.
+ */
+export async function recommendBump(): Promise<{
+  level: number;
+  reason: string;
+  releaseType: ReleaseType;
+}> {
+  return new Promise<any>((resolve, reject) => {
+    conventionalRecommendedBump(
+      { preset: 'angular' },
+      (error, recommendation) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(recommendation);
+        }
+      },
+    );
+  });
+}

@@ -28,7 +28,6 @@ import {
   verifyNoUncommittedChanges,
   verifyPassingGithubStatus,
 } from '../git';
-import { determineVersion } from '../parse-version';
 import { promptConfirmReleasePublish } from '../prompts';
 import { createReleaseTag, pushReleaseTag } from '../tagging';
 import {
@@ -38,6 +37,7 @@ import {
   shouldRelease,
   unpackTarFile,
   verifyBundle,
+  parsePackageVersion,
 } from '../utils';
 import { publishPackageToNpm } from './publish-package-to-npm';
 
@@ -76,7 +76,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   const githubApi = new OctokitApi();
 
   // determine version for the check whether we should release from this branch
-  const version = await determineVersion(workspaceRoot);
+  const version = await parsePackageVersion(workspaceRoot);
 
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
   // #
@@ -135,10 +135,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   await verifyBundle(version, artifactsFolder);
 
   // extract release notes
-  const releaseNotes = extractReleaseNotes(
-    CHANGELOG_FILE_NAME,
-    version.format(),
-  );
+  const releaseNotes = extractReleaseNotes(CHANGELOG_FILE_NAME, version.raw);
 
   const tagName = version.format();
   // create release tag

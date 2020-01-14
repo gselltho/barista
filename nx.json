@@ -37,7 +37,7 @@
     "builders": {
       "tags": ["type:tooling"]
     },
-    "release-tools": {
+    "tools-release": {
       "tags": ["type:tooling"]
     },
     "tools-shared": {

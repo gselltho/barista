@@ -22,6 +22,7 @@ import * as OctokitApi from '@octokit/rest';
 import { bold, cyan, green, italic, red, yellow } from 'chalk';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { SemVer } from 'semver';
 import {
   CHANGELOG_FILE_NAME,
   prependChangelogFromLatestTag,
@@ -34,8 +35,7 @@ import {
   verifyNoUncommittedChanges,
   verifyPassingGithubStatus,
 } from '../git';
-import { promptForNewVersion } from '../new-version-prompt';
-import { determineVersion, Version } from '../parse-version';
+import { promptForNewVersion } from '../version';
 import { promptConfirm } from '../prompts';
 import { getAllowedPublishBranch } from '../publish-branch';
 import {
@@ -45,6 +45,7 @@ import {
   GET_FAILED_CREATE_STAGING_BRANCH_ERROR,
   GET_PR_CREATION_ERROR,
   GET_PUSH_RELEASE_BRANCH_ERROR,
+  parsePackageVersion,
 } from '../utils';
 
 export async function stageRelease(
@@ -64,13 +65,13 @@ export async function stageRelease(
   const githubApi = new OctokitApi();
 
   // determine version
-  const currentVersion = await determineVersion(workspaceRoot);
+  const currentVersion = await parsePackageVersion(workspaceRoot);
   const packageJsonPath = join(workspaceRoot, 'package.json');
   const packageJson = await tryJsonParse<PackageJson>(packageJsonPath);
 
   const newVersion = await promptForNewVersion(currentVersion);
-  const newVersionName = newVersion.format();
-  const needsVersionBump = !newVersion.equals(currentVersion);
+  const newVersionName = newVersion.raw!;
+  const needsVersionBump = newVersion.compare(currentVersion) !== 0;
   const stagingBranch = `release-stage/${newVersionName}`;
 
   verifyNoUncommittedChanges(gitClient);
@@ -174,7 +175,7 @@ export async function stageRelease(
  * Checks if the user is on an allowed publish branch
  * for the specified version.
  */
-function switchToPublishBranch(git: GitClient, newVersion: Version): string {
+function switchToPublishBranch(git: GitClient, newVersion: SemVer): string {
   const allowedBranch = getAllowedPublishBranch(newVersion);
   const currentBranchName = git.getCurrentBranch();
 

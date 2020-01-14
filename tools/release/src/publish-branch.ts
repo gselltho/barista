@@ -1,5 +1,21 @@
 /**
  * @license
+ * Copyright 2020 Dynatrace LLC
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @license
  * Copyright 2019 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +30,12 @@
  * limitations under the License.
  */
 
-import { Version } from './parse-version';
+import { SemVer } from 'semver';
 import { GitClient } from './git/git-client';
 import { italic, bold, red } from 'chalk';
 
 /** Verifies that the user is on the specified publish branch. */
-export function verifyPublishBranch(version: Version, git: GitClient): boolean {
+export function verifyPublishBranch(version: SemVer, git: GitClient): boolean {
   const allowedBranch = getAllowedPublishBranch(version);
   const currentBranchName = git.getCurrentBranch();
 
@@ -39,7 +55,7 @@ export function verifyPublishBranch(version: Version, git: GitClient): boolean {
 export type VersionType = 'major' | 'minor' | 'patch';
 
 /** Determines the allowed branch names for publishing the specified version. */
-export function getAllowedPublishBranch(version: Version): string {
+export function getAllowedPublishBranch(version: SemVer): string {
   const versionType = getSemverVersionType(version);
 
   if (versionType === 'major') {
@@ -52,7 +68,7 @@ export function getAllowedPublishBranch(version: Version): string {
 }
 
 /** Determines the type of the specified Semver version. */
-function getSemverVersionType(version: Version): VersionType {
+function getSemverVersionType(version: SemVer): VersionType {
   if (version.minor === 0 && version.patch === 0) {
     return 'major';
   } else if (version.patch === 0) {

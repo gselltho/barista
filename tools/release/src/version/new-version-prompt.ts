@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2019 Dynatrace LLC
+ * Copyright 2020 Dynatrace LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,16 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import { prompt } from 'inquirer';
-
-import { ReleaseType, createNewVersion } from './create-version';
-import { Version, parseVersionName } from './parse-version';
-
-// These imports lack type definitions.
-// tslint:disable:no-var-requires no-require-imports
-const conventionalRecommendedBump = require(`conventional-recommended-bump`);
-// tslint:enable:no-var-requires no-require-imports
+import { inc, parse, ReleaseType, SemVer, valid } from 'semver';
+import { recommendBump } from './recommend-bump';
+import { gray, red } from 'chalk';
 
 /** Answers that will be prompted for. */
 interface VersionPromptAnswers {
@@ -35,31 +29,33 @@ interface VersionPromptAnswers {
  * specified current version.
  */
 export async function promptForNewVersion(
-  currentVersion: Version,
-): Promise<Version> {
+  currentVersion: SemVer,
+): Promise<SemVer> {
   const recommendedBump = await recommendBump();
-  const recommendVersion = createNewVersion(
-    currentVersion,
-    recommendedBump.releaseType,
-  );
+  const recommendVersion = inc(currentVersion.raw, recommendedBump.releaseType);
 
   console.log(recommendedBump.reason);
-  console.log(
-    `Proposed Version based on commits: ${recommendVersion.format()}`,
-  );
+  console.log(`Proposed Version based on commits: ${recommendVersion}`);
   console.log();
 
   const versionChoices: Array<{
     value: string;
     name: string;
-    releaseType: ReleaseType;
+    releaseType?: ReleaseType;
   }> = [
     createVersionChoice(currentVersion, 'major', 'Major release'),
     createVersionChoice(currentVersion, 'minor', 'Minor release'),
     createVersionChoice(currentVersion, 'patch', 'Patch release'),
   ];
 
-  const answers = await prompt<VersionPromptAnswers>([
+  // Add the possibility to create own semver version tag (pre or alpha)
+  versionChoices.push({
+    name: gray('I prefer a custom version:'),
+    value: 'custom',
+    releaseType: undefined,
+  });
+
+  let answers = await prompt<VersionPromptAnswers>([
     {
       type: 'list',
       name: 'proposedVersion',
@@ -71,46 +67,39 @@ export async function promptForNewVersion(
     },
   ]);
 
-  return parseVersionName(answers.proposedVersion)!;
+  if (answers.proposedVersion === 'custom') {
+    answers = await prompt<VersionPromptAnswers>([
+      {
+        name: 'proposedVersion',
+        message: `Please provide the custom version tag:`,
+        validate: (input: string) => {
+          if (!valid(input)) {
+            console.error(red('\n✘   Please provide a valid semver tag!'));
+            return false;
+          }
+          return true;
+        },
+      },
+    ]);
+  }
+
+  return parse(answers.proposedVersion)!;
 }
 
 /**
  * Creates a new choice for selecting a version inside of
  * an Inquirer list prompt.
  */
-function createVersionChoice(
-  currentVersion: Version,
+export function createVersionChoice(
+  currentVersion: SemVer,
   releaseType: ReleaseType,
   message: string,
   recommended: boolean = false,
 ): { value: string; name: string; releaseType: ReleaseType } {
-  const versionName = createNewVersion(currentVersion, releaseType).format();
+  const versionName = inc(currentVersion.raw, releaseType);
   return {
-    value: versionName,
+    value: versionName!,
     name: `${message} (${versionName})${recommended ? ' [recommended]' : ''}`,
     releaseType,
   };
-}
-
-/**
- * Returns an object containing information for the
- * recommended version bump.
- */
-async function recommendBump(): Promise<{
-  level: number;
-  reason: string;
-  releaseType: ReleaseType;
-}> {
-  return new Promise<any>((resolve, reject) => {
-    conventionalRecommendedBump(
-      { preset: 'angular' },
-      (error, recommendation) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(recommendation);
-        }
-      },
-    );
-  });
 }

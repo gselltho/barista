@@ -30,7 +30,7 @@
  * limitations under the License.
  */
 
-import { Version } from '../parse-version';
+import { SemVer } from 'semver';
 import { getAllowedPublishBranch } from '../publish-branch';
 import { GitClient } from '../git';
 
@@ -43,7 +43,7 @@ export function getReleaseCommit(version: string): string {
  * Evaluates if the current commit is a release and returns its version.
  * Otherwise it returns "no-release".
  */
-export function shouldRelease(git: GitClient, version: Version): boolean {
+export function shouldRelease(git: GitClient, version: SemVer): boolean {
   if (version) {
     const branch = git.getCurrentBranch();
     const allowedBranch = getAllowedPublishBranch(version);
