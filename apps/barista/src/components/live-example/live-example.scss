@@ -28,7 +28,7 @@ $code-font-size: 14px;
 }
 
 .ba-live-example-demo-background {
-  background-color: #f8f8f8;
+  background-color: $gray-100;
 }
 
 :host.ba-live-example-dark .ba-live-example-demo {
@@ -71,7 +71,7 @@ $code-font-size: 14px;
 
 .ba-live-example-control:hover {
   cursor: pointer;
-  background-color: #ccc;
+  background-color: $gray-300;
 
   ::ng-deep svg {
     fill: $royalblue-700;
