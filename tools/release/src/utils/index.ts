@@ -16,6 +16,7 @@
 
 export * from './create-folder';
 export * from './parse-package-version';
+export * from './publish-package';
 export * from './release-errors';
 export * from './should-release';
 export * from './unpack-tar';

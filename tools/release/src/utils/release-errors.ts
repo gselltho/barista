@@ -85,3 +85,9 @@ export const GET_PUSH_RELEASE_BRANCH_ERROR = (stagingBranch: string) =>
 export const GET_PR_CREATION_ERROR = (stagingBranch: string, prTitle: string) =>
   `Could not push create a pull-request for release staging branch "${stagingBranch}"` +
   `Please create the pull-request named "${prTitle}" by hand.`;
+
+export const NPM_PUBLISH_FAILED_ERROR = (errorMessage: string) =>
+  `Could not run NPM publish: \n${errorMessage}`;
+
+export const YARN_PUBLISH_FAILED_ERROR = (errorMessage: string) =>
+  `Could not run YARN publish for the internal version: \n${errorMessage}`;

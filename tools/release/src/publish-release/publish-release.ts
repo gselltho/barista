@@ -39,7 +39,7 @@ import {
   verifyBundle,
   parsePackageVersion,
 } from '../utils';
-import { publishPackageToNpm } from './publish-package-to-npm';
+import { publishPackage } from '../utils/publish-package';
 
 // load the environment variables from the .env file in your workspace
 dotenvConfig();
@@ -105,7 +105,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // #
   // #  D O W N L O A D
   // #  ---------------
-  // #  Download builded components library from our CI to release this version.
+  // #  Download built components library from our CI to release this version.
   // #
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -137,7 +137,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // extract release notes
   const releaseNotes = extractReleaseNotes(CHANGELOG_FILE_NAME, version.raw);
 
-  const tagName = version.format();
+  const tagName = version.raw;
   // create release tag
   createReleaseTag(tagName, releaseNotes, gitClient);
 
@@ -148,9 +148,5 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   await promptConfirmReleasePublish();
 
   // confirm npm publish
-  publishPackageToNpm(artifactTar);
-
-  console.info(green(bold(`  ✓   Published successfully`)));
-
-  // publish TADA!🥳
+  await publishPackage(artifactsFolder, version);
 }

@@ -66,9 +66,8 @@ export abstract class ContinuosIntegrationApi {
   }
 
   /**
-   * Returns an url where an artifact can be downloaded for a branch
-   * @param branchName The branch where the artifact should be downloaded
-   * @param stage The stage where it was created
+   * Returns an Artifact that can be downloaded for a
+   * provided commit sha.
    */
   abstract getArtifactUrlForBranch(
     commitSha: string,
@@ -76,8 +75,8 @@ export abstract class ContinuosIntegrationApi {
 }
 
 /**
- * Continuos integration provider for Circle ci that can provides
- * an url to download a builded dist for a provided commit sha.
+ * Continuos integration provider for Circle ci that provides
+ * an url to download a built dist for a provided commit sha.
  *
  * This artifact can be downloaded later for releasing.
  *

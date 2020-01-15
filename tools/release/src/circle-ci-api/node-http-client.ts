@@ -35,7 +35,7 @@ export class NodeHTTPClient {
 
   /** Wrap the request in an observable */
   request<T>(config: AxiosRequestConfig): Observable<T> {
-    let request: AxiosPromise<T> = this._httpClient.request(config);
+    const request: AxiosPromise<T> = this._httpClient.request(config);
 
     return new Observable<T>((subscriber: Subscriber<T>) => {
       request
