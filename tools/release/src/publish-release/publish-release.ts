@@ -109,7 +109,7 @@ export async function publishRelease(workspaceRoot: string): Promise<void> {
   // #
   // # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-  const releaseCommit = '7c455a1c50a0d67c8e77d5c9633ae6337d1e4347'; // = gitClient.getLocalCommitSha('HEAD')
+  const releaseCommit = gitClient.getLocalCommitSha('HEAD');
   // the location where the builded dist is located
   const artifactsFolder = join(TMP_FOLDER, 'components');
   const artifactTar = `${artifactsFolder}.tar.gz`;

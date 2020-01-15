@@ -30,16 +30,15 @@ export function extractReleaseNotes(
   const changelogContent = readFileSync(changelogPath, 'utf8');
   const escapedVersion = versionName.replace(/\./g, '\\.');
 
-  // Regular expression that matches the release notes for the given version. Note that we specify
-  // the "s" RegExp flag so that the line breaks will be ignored within our regex. We determine the
-  // section of a version by starting with the release header which starts with an h2.
-  // The end of the section will be matched by just looking for the first
-  // subsequent release header.
+  // Get the release header and the release body out of the changelog
+  // https://regex101.com/r/vwjiNT/1/
   const releaseNotesRegex = new RegExp(
-    `## (${escapedVersion}) \\(\\d{4}-\\d{2}-\\d{2}\\) ?(.*?)##? \\d+\\.\\d+`,
-    's',
+    `## (${escapedVersion}) \\(\\d{4}-\\d{2}-\\d{2}\\)([\\s\\S]+?)\\s##\\s`,
+    'gm',
   );
+
   const matches = releaseNotesRegex.exec(changelogContent);
+
   if (matches) {
     // TODO extract release notes and populate the tag via the github api
     return {

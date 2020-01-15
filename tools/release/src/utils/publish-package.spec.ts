@@ -16,7 +16,6 @@
 import * as childProcess from 'child_process';
 import { vol } from 'memfs';
 import { parse } from 'semver';
-import { getFixture } from '../testing/get-fixture';
 import { publishPackage } from './publish-package';
 
 const VERSION = parse('5.0.0')!;
@@ -25,7 +24,7 @@ beforeEach(() => {
   process.chdir('/');
   vol.reset();
   vol.fromJSON({
-    '/components/package.json': getFixture('/components/package.json'),
+    '/components/package.json': JSON.stringify({ version: '5.0.0' }),
   });
 });
 

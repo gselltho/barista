@@ -14,25 +14,31 @@
  * limitations under the License.
  */
 
-import { vol } from 'memfs';
-
-import { GitClient } from '../git/git-client';
+import { PackageJson } from '@dynatrace/barista-components/tools/shared';
 import * as OctokitApi from '@octokit/rest';
-import { publishRelease } from './publish-release';
+import * as childProcess from 'child_process';
+import { vol } from 'memfs';
+import { of } from 'rxjs';
+import { parse } from 'semver';
+import { CircleCiApi } from '../circle-ci-api/circle-ci-api';
+import { extractReleaseNotes } from '../extract-release-notes';
 import * as git from '../git';
+import { GitClient } from '../git/git-client';
+import { getFixture } from '../testing/get-fixture';
 import {
+  CHANGELOG_PARSE_ERROR,
+  GET_GITHUB_STATUS_FAILED_ERROR,
   GET_INVALID_PACKAGE_JSON_VERSION_ERROR,
   GET_LOCAL_DOES_NOT_MATCH_UPSTREAM,
-  CHANGELOG_PARSE_ERROR,
   NO_TOKENS_PROVIDED_ERROR,
-  GET_GITHUB_STATUS_FAILED_ERROR,
   parsePackageVersion,
+  shouldRelease,
 } from '../utils';
-import { getFixture } from '../testing/get-fixture';
-import * as shouldRelease from '../utils/should-release';
-import { parse } from 'semver';
-import { extractReleaseNotes } from '../extract-release-notes';
-import { PackageJson } from '@dynatrace/barista-components/tools/shared';
+// used for mocking
+// tslint:disable-next-line: no-duplicate-imports
+import * as utils from '../utils';
+import * as prompts from '../prompts';
+import { publishRelease } from './publish-release';
 
 beforeEach(() => {
   // Mock console logs away we don't want to bloat the output
@@ -80,9 +86,9 @@ test('Should return false if branch is not a valid release branch', async () => 
     .spyOn(GitClient.prototype, 'getLastCommit')
     .mockImplementation(() => '1234');
 
-  expect(
-    shouldRelease.shouldRelease(new GitClient(process.cwd()), parse('4.15.3')!),
-  ).toBe(false);
+  expect(shouldRelease(new GitClient(process.cwd()), parse('4.15.3')!)).toBe(
+    false,
+  );
 });
 
 test('Should throw an error when the github status is not successful', async () => {
@@ -169,33 +175,76 @@ test('should throw when no npm publish token is provide', async () => {
   }
 });
 
-// // tslint:disable-next-line: dt-no-focused-tests
-// describe.only('publish release', () => {
-//   beforeEach(() => {
-//     process.env.CIRCLE_CI_TOKEN = '87c589ff2b354f46f223c9915583d3ff476776e7';
-//     process.env.NPM_PUBLISH_TOKEN = 'my-token';
+describe('publish release', () => {
+  beforeEach(() => {
+    process.env.CIRCLE_CI_TOKEN = '87c589ff2b354f46f223c9915583d3ff476776e7';
+    process.env.NPM_PUBLISH_TOKEN = 'my-token';
+  });
 
-//     jest.spyOn(releaseCheck, 'shouldRelease').mockReturnValue(true);
-//     jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
-//     jest.spyOn(git, 'verifyNoUncommittedChanges').mockImplementation();
-//     jest.spyOn(git, 'verifyLocalCommitsMatchUpstream').mockImplementation();
-//     jest
-//       .spyOn(GitClient.prototype, 'getLocalCommitSha')
-//       .mockReturnValue('dff6e4181d8589592ab5e568872cccb2ddfb5ef3');
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.clearAllMocks();
+  });
 
-//     // [ { path: 'barista-components',
-//     //     node_index: 0,
-//     //     url:
-//     //      'https://6560-218540919-gh.circle-artifacts.com/0/barista-components' } ]
-//   });
+  test('should run the whole publish pipeline successfully', async () => {
+    const commitSha = 'dff6e4181d8589592ab5e568872cccb2ddfb5ef3';
+    jest.spyOn(utils, 'shouldRelease').mockReturnValue(true);
+    jest.spyOn(git, 'verifyPassingGithubStatus').mockImplementation();
+    jest.spyOn(git, 'verifyNoUncommittedChanges').mockImplementation();
+    jest.spyOn(git, 'verifyLocalCommitsMatchUpstream').mockImplementation();
+    jest
+      .spyOn(GitClient.prototype, 'getLocalCommitSha')
+      .mockReturnValue(commitSha);
 
-//   test('', async () => {
-//     vol.fromJSON({
-//       '/package.json': JSON.stringify({ version: '5.0.0' }),
-//     });
+    jest.spyOn(utils, 'createFolder').mockImplementation();
 
-//     await publishRelease('/');
+    jest
+      .spyOn(CircleCiApi.prototype, 'getArtifactUrlForBranch')
+      .mockReturnValue(
+        of([
+          {
+            path: 'barista-components',
+            node_index: 0,
+            url:
+              'https://6560-218540919-gh.circle-artifacts.com/0/barista-components',
+          },
+        ]),
+      );
 
-//     console.log(vol.toJSON());
-//   });
-// });
+    jest
+      .spyOn(CircleCiApi.prototype, 'downloadArtifact')
+      .mockImplementation(() => of());
+
+    jest.spyOn(utils, 'unpackTarFile').mockImplementation();
+    jest.spyOn(GitClient.prototype, 'hasLocalTag').mockReturnValue(true);
+    jest
+      .spyOn(GitClient.prototype, 'getShaOfLocalTag')
+      .mockReturnValue(commitSha);
+    jest
+      .spyOn(GitClient.prototype, 'pushBranchOrTagToRemote')
+      .mockImplementation(() => true);
+    jest
+      .spyOn(GitClient.prototype, 'getRemoteCommitSha')
+      .mockReturnValue(commitSha);
+    jest
+      .spyOn(prompts, 'promptConfirmReleasePublish')
+      .mockImplementation(async () => {});
+    let processSpy = jest
+      .spyOn(childProcess, 'exec')
+      .mockImplementation((_command: string, _options: any, callback: any) => {
+        return callback(null, { stdout: 'ok' });
+      });
+
+    vol.fromJSON({
+      '/package.json': JSON.stringify({ version: '5.0.0-rc.0' }),
+      '/tmp/components/package.json': JSON.stringify({ version: '5.0.0-rc.0' }),
+      '/CHANGELOG.md': getFixture('CHANGELOG-release.md'),
+    });
+
+    await publishRelease('/');
+
+    // completely remove the spy
+    processSpy.mockRestore();
+    processSpy.mockClear();
+  });
+});
