@@ -31,12 +31,15 @@ import {
 } from './types';
 
 /** Shape of an object to be usable as a option in an autocomplete */
-export type DtFilterFieldDefaultDataSourceOption = { name: string } | string;
+export type DtFilterFieldDefaultDataSourceOption =
+  | { name: string; id?: string }
+  | string;
 
 /** Shape of an object to be usable as a group in an autocomplete */
 export interface DtFilterFieldDefaultDataSourceGroup {
   name: string;
   options: DtFilterFieldDefaultDataSourceOption[];
+  id?: string;
 }
 
 /** Shape of an object to be usable as an autocomplete */
@@ -46,6 +49,7 @@ export interface DtFilterFieldDefaultDataSourceAutocomplete {
   >;
   distinct?: boolean;
   async?: boolean;
+  id?: string;
 }
 
 /** Shape of an object to be usable as a free text variant */
@@ -55,6 +59,7 @@ export interface DtFilterFieldDefaultDataSourceFreeText {
   >;
   validators: DtFilterFieldValidator[];
   unique?: boolean;
+  id?: string;
 }
 
 export interface DtFilterFieldDefaultDataSourceRange {
@@ -68,6 +73,7 @@ export interface DtFilterFieldDefaultDataSourceRange {
     };
   };
   unique?: boolean;
+  id?: string;
 }
 
 export type DtFilterFieldDefaultDataSourceType =
