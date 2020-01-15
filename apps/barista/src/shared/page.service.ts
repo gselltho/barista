@@ -17,7 +17,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { AsyncSubject, Observable, of } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 
 import { BaLocationService } from './location.service';
 
@@ -33,14 +33,14 @@ const CONTENT_PATH_PREFIX = 'data/';
 const ERRORPAGE_404: BaErrorPageContent = {
   title: 'Error 404',
   layout: BaLayoutType.Error,
-  errormessage:
+  content:
     'Sorry, the page you tried to access does not exist. Are you using an outdated link?',
 };
 
 const ERRORPAGE: BaErrorPageContent = {
   title: 'Oops!',
   layout: BaLayoutType.Error,
-  errormessage:
+  content:
     "Sorry, an error has occured. Don't worry, we're working to fix the problem!",
 };
 
@@ -90,9 +90,11 @@ export class BaPageService {
     this.http
       .get<BaSinglePageContent>(requestPath, { responseType: 'json' })
       .pipe(
-        tap(data => {
+        map(data => {
           if (!data || typeof data !== 'object') {
-            throw Error('Invalid data');
+            return ERRORPAGE;
+          } else {
+            return data;
           }
         }),
         catchError((error: HttpErrorResponse) => {

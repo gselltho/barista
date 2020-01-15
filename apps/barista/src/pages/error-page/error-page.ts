@@ -28,6 +28,4 @@ import { BaPage } from '../page-outlet';
 })
 export class BaErrorPage implements BaPage {
   contents: BaErrorPageContent;
-
-  constructor() {}
 }

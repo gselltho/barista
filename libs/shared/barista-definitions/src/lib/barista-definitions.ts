@@ -54,7 +54,7 @@ export interface BaPageMetaBase {
 
 export interface BaErrorPageContent extends BaPageMetaBase {
   layout: BaLayoutType.Error;
-  errormessage: string;
+  content: string;
 }
 
 export interface BaSinglePageMeta extends BaPageMetaBase {
